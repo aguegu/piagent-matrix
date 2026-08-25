@@ -1,0 +1,20 @@
+{
+  "name": "tradebots-matrix",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "file:../../../n/lib/node_modules/@earendil-works/pi-coding-agent",
+    "dompurify": "^3.4.14",
+    "jsdom": "^30.0.1",
+    "markdown-it": "^15.0.0",
+    "matrix-js-sdk": "^42.2.0"
+  }
+}
