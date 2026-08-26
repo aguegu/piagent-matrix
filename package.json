@@ -1,20 +1,21 @@
 {
-  "name": "tradebots-matrix",
+  "name": "tradebots-matrix-v2",
   "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "Matrix bot on matrix-bot-sdk with a persistent on-disk crypto store.",
   "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "cross-sign": "node scripts/cross-sign.mjs"
+  },
+  "license": "ISC",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "file:../../../n/lib/node_modules/@earendil-works/pi-coding-agent",
-    "dompurify": "^3.4.14",
-    "jsdom": "^30.0.1",
-    "markdown-it": "^15.0.0",
+    "config": "^5.0.1",
+    "dotenv-flow": "^4.1.0",
+    "matrix-bot-sdk": "^0.8.0"
+  },
+  "devDependencies": {
     "matrix-js-sdk": "^42.2.0"
   }
 }

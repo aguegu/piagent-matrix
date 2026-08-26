@@ -1,5 +1,10 @@
 node_modules/
-.env
 data/
-sessions/
 *.log
+
+# The parent .gitignore excludes .env repo-wide, but v2's .env is a committed
+# template holding no secrets — real values live in .env.local.
+!.env
+.env.local
+.env.*.local
+v1-archive/
