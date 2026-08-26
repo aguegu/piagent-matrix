@@ -52,6 +52,36 @@ const LOG_LEVELS = {
   error: LogLevel.ERROR,
 };
 
+/**
+ * Logger wrapper around RichConsoleLogger that swallows a small set of known
+ * noisy error patterns from the SDK.
+ *
+ * The bot-sdk calls `LogService.error("MatrixHttpClient", "(REQ-N)", body)`
+ * for every HTTP request that returns an errcode, including the `M_NOT_FOUND`
+ * noise from the encryption-state probe and DM lookup. Real errors (500s,
+ * decryption failures, network problems) pass through unchanged.
+ */
+const baseLogger = new RichConsoleLogger();
+const filteredLogger = {
+  trace: (...args) => baseLogger.trace(...args),
+  debug: (...args) => baseLogger.debug(...args),
+  info: (...args) => baseLogger.info(...args),
+  warn: (...args) => baseLogger.warn(...args),
+  error: (module, ...rest) => {
+    if (module === "MatrixHttpClient" && isNoisyHttpError(rest)) return;
+    baseLogger.error(module, ...rest);
+  },
+};
+
+function isNoisyHttpError(args) {
+  // The third argument from http.js is the redacted error body. Look for
+  // M_NOT_FOUND specifically — everything else is forwarded.
+  for (const a of args) {
+    if (a && typeof a === "object" && a.errcode === "M_NOT_FOUND") return true;
+  }
+  return false;
+}
+
 // A token is tied to a device, and a device is tied to the crypto store, so the
 // two have to be created and reused together. Losing one invalidates the other.
 async function resolveAccessToken() {
@@ -130,7 +160,7 @@ async function shutdown(signal) {
 }
 
 async function main() {
-  LogService.setLogger(new RichConsoleLogger());
+  LogService.setLogger(filteredLogger);
   LogService.setLevel(LOG_LEVELS[config.get("logger.level")] ?? LogLevel.INFO);
   // The rust crypto layer is extremely chatty at DEBUG and drowns everything else.
   LogService.muteModule("Metrics");
