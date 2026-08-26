@@ -39,5 +39,9 @@ export default {
     // Working directory the agent operates in. Each Matrix room shares this cwd;
     // per-room cwd is intentionally out of scope for the first cut.
     cwd: process.env.BOT_CWD || process.cwd(),
+    // SESSION_DIR: when set, persist each room's conversation under
+    // `${SESSION_DIR}/<encoded-roomId>/` so memory survives bot restarts.
+    // When empty, sessions are in-memory only and reset on every restart.
+    sessionDir: process.env.SESSION_DIR || "",
   },
 };

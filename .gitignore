@@ -1,5 +1,6 @@
 node_modules/
 data/
+sessions/
 *.log
 
 # The parent .gitignore excludes .env repo-wide, but v2's .env is a committed

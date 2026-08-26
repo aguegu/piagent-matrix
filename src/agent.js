@@ -13,6 +13,8 @@
 //     ends. Tool-call status lines are still surfaced inline so a long tool
 //     run is visible in the final answer.
 
+import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 import {
   createAgentSession,
@@ -99,6 +101,10 @@ export class AgentManager {
   /**
    * Get or create the session for a room. Returns the same promise on concurrent
    * calls so two near-simultaneous messages share one session.
+   *
+   * When `opts.sessionDir` is set, the session is loaded from / saved to
+   * `${sessionDir}/${roomId}/` so conversation memory survives bot restarts.
+   * Otherwise the session lives in memory only.
    * @param {string} roomId
    */
   #getOrCreateSession(roomId) {
@@ -107,7 +113,7 @@ export class AgentManager {
 
     p = (async () => {
       await this.#ensureModel();
-      const sessionManager = SessionManager.inMemory(this.opts.cwd);
+      const sessionManager = this.#buildSessionManager(roomId);
       const result = await createAgentSession({
         cwd: this.opts.cwd,
         sessionManager,
@@ -118,11 +124,29 @@ export class AgentManager {
       if (result.modelFallbackMessage) {
         LogService.warn("agent", `model fallback: ${result.modelFallbackMessage}`);
       }
-      LogService.info("agent", `Created new agent session for room ${roomId}`);
+      const persisted = this.opts.sessionDir ? "persistent" : "in-memory";
+      LogService.info("agent", `Created ${persisted} agent session for room ${roomId}`);
       return result.session;
     })();
     this.sessions.set(roomId, p);
     return p;
+  }
+
+  /**
+   * Pick a SessionManager appropriate for the current configuration.
+   * Without a sessionDir we get fresh in-memory state on every bot restart.
+   * With a sessionDir we resume the most recent session per room, or start
+   * a new one if none exists yet.
+   */
+  #buildSessionManager(roomId) {
+    if (!this.opts.sessionDir) {
+      return SessionManager.inMemory(this.opts.cwd);
+    }
+    // One subdirectory per room keeps conversations isolated and makes it
+    // obvious where each room's session lives on disk.
+    const roomDir = resolve(this.opts.sessionDir, encodeRoomId(roomId));
+    mkdirSync(roomDir, { recursive: true });
+    return SessionManager.continueRecent(this.opts.cwd, roomDir);
   }
 
   /**
@@ -235,6 +259,11 @@ export class AgentManager {
 
 function renderReply({ text, toolLines }) {
   return (toolLines.length ? toolLines.join("\n") + "\n\n" : "") + text;
+}
+
+/** Matrix room IDs are safe-ish on disk, but colons and bangs make for ugly paths. */
+function encodeRoomId(roomId) {
+  return roomId.replace(/[!@:/\\]/g, "_");
 }
 
 /** Concatenate all text blocks in an assistant message. */
