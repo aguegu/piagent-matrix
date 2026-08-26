@@ -23,7 +23,7 @@ export class MatrixBot {
     this.config = config;
     this.log = logger;
     this.client = null;
-    /** @type {Set<(ctx: MessageContext) => void>} */
+    /** @type {Set<(ctx:ctx) => void>} */
     this.handlers = new Set();
     /** @type {Set<string>} event ids we have already emitted to handlers */
     this.handledEvents = new Set();
@@ -57,8 +57,7 @@ export class MatrixBot {
 
     // cryptoCallbacks must be passed at createClient time — the property is
     // captured by the constructor and ignored afterwards. The callback itself
-    // closes over `cachedRecoveryKeyEncoded` and reads it lazily, so we can
-    // update it later via the cacheSecretStorageKey hook.
+    // closes over `cachedRecoveryKeyEncoded` and reads it lazily.
     if (cachedRecoveryKeyEncoded) {
       let cachedKeyId = null;
       const { decodeRecoveryKey } = await import(
@@ -144,9 +143,7 @@ export class MatrixBot {
       this.log.info?.("Secret storage already set up.");
     }
 
-    // Try to load the key backup private key from secret storage. This is
-    // what makes the key backup trusted and lets us decrypt messages from
-    // before this device logged in.
+    // Try to load the key backup private key from secret storage.
     try {
       this.log.info?.("Loading key backup from secret storage…");
       await cryptoApi.loadSessionBackupPrivateKeyFromSecretStorage();
@@ -168,47 +165,18 @@ export class MatrixBot {
     } catch (err) {
       this.log.warn?.(`checkKeyBackupAndEnable failed: ${err?.message ?? err}`);
     }
-
-    // Cross-sign our own device so other clients see it as verified and
-    // share encryption keys with us. Without this, an unverified bot device
-    // is treated as untrusted by clients like Firefox Element.
-    try {
-      const ready = await cryptoApi.isCrossSigningReady();
-      this.log.info?.(`Cross-signing ready: ${ready}`);
-      if (!ready) {
-        this.log.info?.("Bootstrapping cross-signing from secret storage…");
-        await cryptoApi.bootstrapCrossSigning({
-          authUploadDeviceSigningKeys: async (makeRequest) => {
-            this.log.info?.("Uploading cross-signing public keys (no auth needed).");
-            await makeRequest({});
-          },
-        });
-        this.log.info?.("Cross-signing bootstrapped.");
-      }
-      const deviceId = this.client.getDeviceId();
-      if (deviceId) {
-        await cryptoApi.crossSignDevice(deviceId);
-        this.log.info?.(`Cross-signed our own device ${deviceId}.`);
-      }
-    } catch (err) {
-      this.log.warn?.(`Cross-sign setup failed: ${err?.message ?? err}`);
-    }
     // -------------------------------------------------------------------
 
-    await this.client.startClient({ initialSyncLimit: 20 });
-
-    this.client.on(ClientEvent.Sync, (state, _prev, data) => {
-      if (state === "PREPARED") {
-        this.log.info?.(`Sync ready. ${this.client.getRooms().length} rooms known.`);
-        for (const room of this.client.getRooms()) {
-          const members = room.getJoinedMemberCount?.() ?? "?";
-          this.log.info?.(`  room ${room.roomId}  members=${members}  name=${JSON.stringify(room.name)}`);
-        }
-      } else if (state === "ERROR" || state === "RECONNECTING") {
-        const err = data?.error;
-        this.log.warn?.(`Sync state=${state}`, err?.message ?? "");
-      }
+    // Publish presence as "online" so other clients don't refuse to send.
+    this.#publishPresence();
+    setInterval(() => this.#publishPresence().catch(() => {}), 60_000);
+    this.client.on(ClientEvent.Sync, (state) => {
+      if (state === "PREPARED") this.#publishPresence().catch(() => {});
     });
+
+    // Start the long-running sync loop. This must come AFTER all event
+    // listeners are attached.
+    await this.client.startClient({ initialSyncLimit: 20 });
 
     // Auto-join rooms when invited, restricted to allowed senders.
     this.client.on(RoomEvent.MyMembership, async (room, membership) => {
@@ -228,54 +196,71 @@ export class MatrixBot {
       }
     });
 
-    // Publish presence as "online" so other clients don't refuse to send
-    // messages thinking we're offline.
-    this.#publishPresence();
-    setInterval(() => this.#publishPresence().catch(() => {}), 60_000);
-    this.client.on(ClientEvent.Sync, (state) => {
-      if (state === "PREPARED") this.#publishPresence().catch(() => {});
+    this.client.on(ClientEvent.Sync, (state, _prev, data) => {
+      if (state === "PREPARED") {
+        this.log.info?.(`Sync ready. ${this.client.getRooms().length} rooms known.`);
+        for (const room of this.client.getRooms()) {
+          const members = room.getJoinedMemberCount?.() ?? "?";
+          this.log.info?.(`  room ${room.roomId}  members=${members}  name=${JSON.stringify(room.name)}`);
+        }
+      } else if (state === "ERROR" || state === "RECONNECTING") {
+        const err = data?.error;
+        this.log.warn?.(`Sync state=${state}`, err?.message ?? "");
+      }
     });
 
     this.client.on(RoomEvent.Timeline, (event, room, toStartOfTimeline) => {
-      const type = event.getType();
-      const sender = event.getSender();
-      const status = event.status;
-      const isSelf = sender === this.client.getUserId();
-      const eventId = event.getEventId();
-      this.log.debug?.(
-        `[timeline] room=${room.roomId} type=${type} sender=${sender} self=${isSelf} status=${status} backfill=${toStartOfTimeline} contentKeys=${Object.keys(event.getContent() || {}).join(",")}`,
-      );
-      if (toStartOfTimeline) return;
-      if (type !== "m.room.message") return;
-      if (isSelf) return;
-      if (status && ["sending", "queued", "encrypting", "sending_failed"].includes(status)) {
-        this.log.debug?.(`[timeline] skipping local-echo status=${status}`);
-        return;
-      }
-      if (eventId && this.handledEvents.has(eventId)) {
-        this.log.debug?.(`[timeline] already handled ${eventId}`);
-        return;
-      }
-      // Skip events we can't decrypt yet. matrix-js-sdk will re-emit the
-      // same event id once keys arrive (or via Event.decrypted); our dedupe
-      // makes that safe.
-      if (event.isDecryptionFailure?.()) {
-        this.log.debug?.(`[timeline] decryption pending for ${eventId} (${event.decryptionFailureReason})`);
-        return;
-      }
-      const ctx = this.#buildContext(event, room);
-      if (!ctx) {
-        this.log.debug?.(`[timeline] buildContext returned null`);
-        return;
-      }
-      if (eventId) this.handledEvents.add(eventId);
-      this.log.info?.(`[timeline] HANDLING message from ${sender} in ${room.roomId}: ${JSON.stringify(ctx.text)}`);
-      for (const fn of this.handlers) {
-        try {
-          fn(ctx);
-        } catch (err) {
-          this.log.error?.("handler threw:", err);
+      try {
+        // Some timeline events arrive as objects that lack getId (e.g.
+        // local echoes). Skip them silently.
+        if (!event || typeof event.getType !== "function") return;
+        const type = event.getType();
+        const sender = event.getSender();
+        let eventId = null;
+        if (typeof event.getId === "function") {
+          try { eventId = event.getId(); } catch { /* not a MatrixEvent */ }
         }
+        const status = event?.status;
+        const isSelf = sender === this.client.getUserId();
+        if (toStartOfTimeline) return;
+        if (type !== "m.room.message") return;
+        if (isSelf) return;
+        if (status && ["sending", "queued", "encrypting", "sending_failed"].includes(status)) {
+          this.log.debug?.(`[timeline] skipping local-echo status=${status}`);
+          return;
+        }
+        if (!eventId) {
+          this.log.warn?.(
+            `[timeline] event has no getId: ctor=${event?.constructor?.name}`,
+          );
+          return;
+        }
+        if (this.handledEvents.has(eventId)) {
+          this.log.debug?.(`[timeline] already handled ${eventId}`);
+          return;
+        }
+        if (event.isDecryptionFailure?.()) {
+          this.log.debug?.(`[timeline] decryption pending for ${eventId}`);
+          return;
+        }
+        const ctx = this.#buildContext(event, room);
+        if (!ctx) {
+          this.log.debug?.(`[timeline] buildContext returned null`);
+          return;
+        }
+        this.handledEvents.add(eventId);
+        this.log.info?.(`[timeline] HANDLING message from ${sender} in ${room.roomId}: ${JSON.stringify(ctx.text)}`);
+        for (const fn of this.handlers) {
+          try {
+            fn(ctx);
+          } catch (err) {
+            this.log.error?.("handler threw:", err);
+          }
+        }
+      } catch (err) {
+        this.log.warn?.(
+          `timeline event skipped: ${err?.message ?? err}\n${err?.stack?.split("\n").slice(1, 6).join("\n") ?? ""}`,
+        );
       }
     });
 
@@ -294,7 +279,7 @@ export class MatrixBot {
     return {
       roomId: room.roomId,
       sender: event.getSender(),
-      eventId: event.getEventId(),
+      eventId: event.getId(),
       text,
       formattedBody: formatted,
       raw: event,
@@ -313,7 +298,7 @@ export class MatrixBot {
       format: "org.matrix.custom.html",
       formatted_body: html,
       "m.relates_to": {
-        "m.in_reply_to": { event_id: event.getEventId() },
+        "m.in_reply_to": { event_id: event.getId() },
       },
     };
     return room.sendEvent("m.room.message", content);
