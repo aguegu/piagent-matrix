@@ -31,4 +31,13 @@ export default {
   logger: {
     level: process.env.LOG_LEVEL || "info",
   },
+  agent: {
+    // PI_MODEL = "<provider>/<model-id>". If unset, picks the first available.
+    model: process.env.PI_MODEL || "",
+    // PI_THINKING_LEVEL = off | minimal | low | medium | high | xhigh | max. Default low.
+    thinkingLevel: process.env.PI_THINKING_LEVEL || "low",
+    // Working directory the agent operates in. Each Matrix room shares this cwd;
+    // per-room cwd is intentionally out of scope for the first cut.
+    cwd: process.env.BOT_CWD || process.cwd(),
+  },
 };

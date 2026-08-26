@@ -1,9 +1,13 @@
-// Step 1: connect to Matrix with a persistent on-disk crypto store and echo
-// back what allowed users send. No agent yet.
+// Step 1: connect to Matrix with a persistent on-disk crypto store.
 //
-// The whole point of v2 is that crypto state survives restarts: the rust-sdk
-// store is a real SQLite file, so the bot keeps its device keys instead of
-// minting a new Olm account on every boot the way matrix-js-sdk did.
+// The whole point of the new crypto stack is that device keys survive restarts:
+// the rust-sdk store is a real SQLite file, so the bot keeps its Olm/Megolm
+// identity instead of minting a new Olm account on every boot the way the
+// old matrix-js-sdk path did.
+//
+// Step 2: each allowed m.text message is forwarded to a per-room AgentManager
+// (see ./agent.js). The reply streams back into the room via LiveMessage
+// (edit-in-place, with the encrypted-room dance baked in — see ./status.js).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -20,6 +24,7 @@ import {
 } from "matrix-bot-sdk";
 import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
+import { AgentManager } from "./agent.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -94,6 +99,36 @@ function isAllowed(sender) {
   return matrix.allowedUsers.includes(sender);
 }
 
+// Lazy singleton so we only pay ModelRuntime.create() (which reads auth + models
+// catalog from disk) when the first message actually arrives.
+let agentPromise = null;
+let botClient = null;
+function getAgent() {
+  if (!agentPromise) {
+    const opts = config.get("agent");
+    agentPromise = Promise.resolve(new AgentManager(opts));
+  }
+  return agentPromise;
+}
+
+async function shutdown(signal) {
+  LogService.info("bot", `Received ${signal}, shutting down.`);
+  try {
+    if (agentPromise) {
+      const agent = await agentPromise;
+      await agent.dispose();
+    }
+  } catch (err) {
+    LogService.warn("bot", `agent.dispose: ${err?.message ?? err}`);
+  }
+  try {
+    botClient?.stop?.();
+  } catch {
+    /* ignore */
+  }
+  process.exit(0);
+}
+
 async function main() {
   LogService.setLogger(new RichConsoleLogger());
   LogService.setLevel(LOG_LEVELS[config.get("logger.level")] ?? LogLevel.INFO);
@@ -107,6 +142,7 @@ async function main() {
   const cryptoStore = new RustSdkCryptoStorageProvider(CRYPTO_PATH, StoreType.Sqlite);
 
   const client = new MatrixClient(matrix.homeserver, accessToken, storage, cryptoStore);
+  botClient = client;
   AutojoinRoomsMixin.setupOnClient(client);
 
   client.on("room.invite", (roomId, event) => {
@@ -146,7 +182,8 @@ async function main() {
     await client.sendReadReceipt(roomId, event.event_id).catch(() => {});
 
     await withTyping(client, roomId, async () => {
-      await client.replyText(roomId, event, `Echo: ${body}`);
+      const agent = await getAgent();
+      await agent.handleMessage({ roomId, text: body, sender: event.sender, client });
     });
   });
 
@@ -155,6 +192,12 @@ async function main() {
   const joined = await client.getJoinedRooms();
   LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
+
+  // Make sure agent + sync are torn down cleanly. The handoff flagged
+  // `client` as undefined in this scope (defined only inside main), so capture
+  // it on the module for the handler.
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 main().catch((err) => {
