@@ -1,7 +1,7 @@
 {
-  "name": "tradebots-matrix-v2",
+  "name": "tradebots-matrix",
   "version": "0.2.0",
-  "description": "Matrix bot on matrix-bot-sdk with a persistent on-disk crypto store.",
+  "description": "Matrix bot fronting the pi coding agent, with E2EE and a persistent crypto store.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
