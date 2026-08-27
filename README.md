@@ -74,15 +74,52 @@ empty means everyone, and the agent runs shell commands.
 
 ### 4. Give the agent a model provider
 
-The bot reads pi's credentials from `PI_AGENT_DIR` (default `data/pi`), *not*
-`~/.pi/agent`. Without this it starts fine and then fails on the first message
-with `No models with complete auth are available in …`.
+The bot reads pi's credentials from `PI_AGENT_DIR` (default `data/pi`), **not**
+`~/.pi/agent`. A working interactive `pi` login on the same machine does not
+carry over. Skip this and the bot starts, joins, and then fails on the first
+message with `No models with complete auth are available in …`.
+
+You do not need pi installed or logged in. Pick whichever fits:
+
+**a. An API key in `.env.local`** — simplest, and all a fresh machine needs.
+`dotenv-flow` puts it in the environment and pi picks it up, writing
+`data/pi/auth.json` on first use:
 
 ```sh
-PI_AGENT_DIR=./data/pi pi          # authenticate a provider
-# or reuse an existing login:
+echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
+```
+
+Recognised keys include `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
+`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`,
+`CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
+`XAI_API_KEY`.
+
+**b. Log in interactively** — needed for OAuth/subscription providers, where
+there is no API key to paste. pi ships as a dependency, so no global install:
+
+```sh
+PI_AGENT_DIR=./data/pi npx pi
+# then inside pi:  /login <provider>
+```
+
+**c. Reuse an existing login** on this machine:
+
+```sh
 mkdir -p data/pi && cp ~/.pi/agent/auth.json data/pi/
 ```
+
+Check it worked before starting:
+
+```sh
+node -e "import('@earendil-works/pi-coding-agent').then(async m=>{
+  const rt = await m.ModelRuntime.create({ authPath:'./data/pi/auth.json', modelsStorePath:'./data/pi/models-store.json' });
+  const a = await rt.getAvailable();
+  console.log(a.length ? 'available: '+a.map(x=>x.provider+'/'+x.id).join(', ') : 'NONE — see step 4');
+})"
+```
+
+Set `PI_MODEL` in `.env.local` to pin one, e.g. `anthropic/claude-opus-4-5`.
+Left empty, the bot uses the first available.
 
 ### 5. First start
 

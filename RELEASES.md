@@ -39,6 +39,7 @@
 
 ### Documentation
 
+* Documented setting up a provider from nothing: an API key in `.env.local` is enough, since dotenv-flow puts it in the environment and pi writes `data/pi/auth.json` on first use. No pi install, no login, no copying credentials. The earlier instructions assumed pi was already installed and authenticated
 * README opens with an ordered **Getting started** walkthrough, in dependency order, plus a troubleshooting table mapping each startup error to the step that fixes it. A fresh clone previously failed one step at a time — most visibly at the first message, with `No models with complete auth are available in …`, because pi's provider must be authenticated in `PI_AGENT_DIR` rather than `~/.pi/agent`
 
 * Documented that `@matrix-org/matrix-sdk-crypto-nodejs` requires its `postinstall` to run: it ships no binary and downloads the native crypto library at install time, so a blocked install script leaves the bot unable to start
