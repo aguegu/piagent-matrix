@@ -20,6 +20,7 @@
 
 ### Fixes
 
+* Stopped presenting `~/.pi/agent` as pi's fixed default. It comes from `piConfig.configDir` in whichever pi build is running — `.pi` for the npm package, but a standalone install can differ (one reported `~/.config/pi`). Setting `PI_CODING_AGENT_DIR` explicitly sidesteps the question entirely, which is now what the docs recommend
 * The "no provider" error now says which of the three states it found — no `auth.json`, an empty `{}` one, or credentials that exist but are unusable. Both pi and this bot write an empty `auth.json` at startup, so an operator who opens pi and exits sees the file appear and reasonably concludes they logged in
 * Guidance now leads with `/login` rather than an API key in `.env.local`. pi accepts a pasted API key, so logging in works headless for api-key providers and keeps the credential in pi's own store instead of a project file; only OAuth needs a browser
 * Authentication instructions named the wrong environment variable. `PI_AGENT_DIR` is this bot's; the pi CLI reads `PI_CODING_AGENT_DIR` and ignores ours, so `PI_AGENT_DIR=./data/pi npx pi` wrote credentials to `~/.pi/agent` — appearing to succeed while leaving the bot with none. Corrected in the README, the `.env` template and the runtime error message, which had been repeating the wrong command back to the operator

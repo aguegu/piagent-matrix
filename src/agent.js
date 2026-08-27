@@ -420,7 +420,8 @@ function describeMissingAuth(agentDir) {
     `so this works headless for api-key providers (only OAuth needs a browser):\n` +
     `       PI_CODING_AGENT_DIR=${agentDir ?? "<dir>"} npx pi     then /login <provider>\n` +
     `     Note that is pi's OWN variable. PI_AGENT_DIR is this bot's, and the pi CLI ignores ` +
-    `it — writing to ~/.pi/agent instead, which looks like success.\n` +
+    `it — writing to its own default instead (from piConfig.configDir in whichever pi ` +
+    `build you run; ~/.pi/agent for the npm package), which looks like success.\n` +
     `  2. Or put a provider API key in the environment, e.g. ANTHROPIC_API_KEY=... ` +
     `(in .env.local, or exported before starting). Fewer steps, but it puts the key in a file ` +
     `or your shell history rather than pi's credential store.`

@@ -91,10 +91,16 @@ PI_CODING_AGENT_DIR=./data/pi npx pi
 ```
 
 > **Note the variable.** `PI_CODING_AGENT_DIR` is pi's own; `PI_AGENT_DIR` is
-> this bot's. The pi CLI ignores `PI_AGENT_DIR` and silently writes to
-> `~/.pi/agent`, which looks like success and leaves the bot finding nothing.
+> this bot's. The pi CLI ignores `PI_AGENT_DIR` and silently writes to its own
+> default instead, which looks like success and leaves the bot finding nothing.
 > An `auth.json` containing `{}` means exactly this — the file is created at
 > startup, so its presence does not mean a login completed.
+>
+> Setting `PI_CODING_AGENT_DIR` also avoids having to know where that default
+> is. It comes from `piConfig.configDir` in whichever pi build you are running —
+> `~/.pi/agent` for the npm package, but a standalone install can differ (one
+> reported `~/.config/pi`). Check with `command -v pi` and `npx pi --version` if
+> you need to find an existing credential.
 
 **b. An API key in the environment** — fewer steps, but it puts the key in a
 file or your shell history rather than pi's credential store. `dotenv-flow` puts
@@ -110,7 +116,8 @@ Recognised keys include `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
 `CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
 `XAI_API_KEY`.
 
-**c. Reuse an existing login** on this machine:
+**c. Reuse an existing login** on this machine — copy from wherever your pi
+keeps it (see the note above; `~/.pi/agent` for the npm package):
 
 ```sh
 mkdir -p data/pi && cp ~/.pi/agent/auth.json data/pi/
@@ -162,7 +169,7 @@ Invite the bot from an allowlisted account; it autojoins. Send it a message.
 | `Cannot find module '…-linux-x64-gnu'` | Install script skipped — step 2 |
 | `Missing config: matrix.homeserver` | `.env.local` missing or unfilled — step 3 |
 | `Missing config: agent.cwd (BOT_CWD)` | Started from a directory where `dotenv-flow` finds no `.env` — step 5 |
-| `No models with complete auth are available in …` | pi provider not authenticated in `PI_AGENT_DIR` — step 4. If you logged in with `PI_AGENT_DIR=… pi`, the credential went to `~/.pi/agent` instead: pi's own variable is `PI_CODING_AGENT_DIR` |
+| `No models with complete auth are available in …` | pi provider not authenticated in `PI_AGENT_DIR` — step 4. If you logged in with `PI_AGENT_DIR=… pi`, the credential went to pi's own default instead: pi's variable is `PI_CODING_AGENT_DIR` |
 | `Allowing … — MATRIX_ALLOWED_USERS is empty` | Anyone can drive the agent — step 3 |
 | "Encrypted by a device not verified by its owner" | Not cross-signed — step 6 |
 
