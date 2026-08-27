@@ -122,7 +122,7 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `PI_MODEL` | no | `provider/model-id`, or a bare id. Default: first available |
 | `PI_THINKING_LEVEL` | no | `off`…`max`. Default `low` |
 | `PI_AGENT_DIR` | no | pi's auth and settings. Default `${DATA_DIR}/pi` |
-| `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `./workspace`; the bot refuses to start if unset |
+| `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `/tmp/piagent-workspace`; the bot refuses to start if unset |
 | `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
 | `OUTBOX_DIR` | no | Spool watched for outgoing messages. Default `./outbox` |
 | `OUTBOX_DEFAULT_ROOM` | no | Room for `*.txt` drops |
