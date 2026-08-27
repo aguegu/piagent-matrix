@@ -158,6 +158,16 @@ export class AgentManager {
       return result.session;
     })();
     this.sessions.set(roomId, p);
+
+    // Cache the promise so concurrent messages share one session — but only
+    // while it succeeds. A rejected promise left in the map is replayed to
+    // every later message, so a room that failed once (no provider configured,
+    // say) keeps reporting that first error even after the cause is fixed, and
+    // only a restart clears it. Evict on failure so the next message retries.
+    p.catch(() => {
+      if (this.sessions.get(roomId) === p) this.sessions.delete(roomId);
+    });
+
     return p;
   }
 

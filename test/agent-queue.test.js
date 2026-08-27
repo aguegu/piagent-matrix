@@ -135,3 +135,40 @@ describe("AgentManager per-room serialization", () => {
     assert.ok(session.promptsRun.length <= 12, "no run is duplicated");
   });
 });
+
+describe("session creation failures do not poison a room", () => {
+  it("retries after a failed session creation instead of replaying the error", async () => {
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const roomId = "!room:example.org";
+
+    // First attempt fails the way a missing provider does; later ones succeed.
+    let attempts = 0;
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      createSession: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("No models with complete auth are available");
+        return { session };
+      },
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    await assert.rejects(
+      mgr.handleMessage({ roomId, text: "first", sender: "@a:example.org", client }),
+      /No models with complete auth/,
+      "the first message surfaces the real error",
+    );
+
+    // The cause is now fixed; the next message must try again rather than
+    // replay the cached rejection.
+    await mgr.handleMessage({ roomId, text: "second", sender: "@a:example.org", client });
+
+    assert.equal(attempts, 2, "session creation is retried, not replayed from cache");
+    assert.deepEqual(
+      client.sent.map((m) => m.body),
+      ["reply to second"],
+      "the retried message is answered",
+    );
+  });
+});
