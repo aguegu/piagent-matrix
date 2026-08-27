@@ -25,6 +25,7 @@ import {
 import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
 import { AgentManager } from "./agent.js";
+import { startOutbox } from "./outbox.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -133,6 +134,7 @@ function isAllowed(sender) {
 // catalog from disk) when the first message actually arrives.
 let agentPromise = null;
 let botClient = null;
+let stopOutbox = null;
 function getAgent() {
   if (!agentPromise) {
     const opts = config.get("agent");
@@ -143,6 +145,11 @@ function getAgent() {
 
 async function shutdown(signal) {
   LogService.info("bot", `Received ${signal}, shutting down.`);
+  try {
+    stopOutbox?.();
+  } catch {
+    /* ignore */
+  }
   try {
     if (agentPromise) {
       const agent = await agentPromise;
@@ -157,6 +164,36 @@ async function shutdown(signal) {
     /* ignore */
   }
   process.exit(0);
+}
+
+/**
+ * Handle one incoming room message. Errors propagate to the caller, which is
+ * responsible for catching them — see the `room.message` registration.
+ */
+async function handleRoomMessage(client, roomId, event) {
+  if (event.sender === (await client.getUserId())) return;
+  const body = event.content?.body;
+  if (event.content?.msgtype !== "m.text" || !body) return;
+
+  if (!isAllowed(event.sender)) {
+    LogService.info("bot", `Ignoring ${event.sender} — not allowed.`);
+    return;
+  }
+
+  const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
+  LogService.info(
+    "bot",
+    `< ${encrypted ? "[e2ee] " : ""}${event.sender}: ${JSON.stringify(body)}`,
+  );
+
+  // Acknowledge immediately so the sender sees the bot registered the message
+  // even if the reply takes a while.
+  await client.sendReadReceipt(roomId, event.event_id).catch(() => {});
+
+  await withTyping(client, roomId, async () => {
+    const agent = await getAgent();
+    await agent.handleMessage({ roomId, text: body, sender: event.sender, client });
+  });
 }
 
 async function main() {
@@ -191,29 +228,17 @@ async function main() {
     LogService.error("bot", `Failed to decrypt in ${roomId}: ${err?.message ?? err}`);
   });
 
-  client.on("room.message", async (roomId, event) => {
-    if (event.sender === (await client.getUserId())) return;
-    const body = event.content?.body;
-    if (event.content?.msgtype !== "m.text" || !body) return;
-
-    if (!isAllowed(event.sender)) {
-      LogService.info("bot", `Ignoring ${event.sender} — not allowed.`);
-      return;
-    }
-
-    const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
-    LogService.info(
-      "bot",
-      `< ${encrypted ? "[e2ee] " : ""}${event.sender}: ${JSON.stringify(body)}`,
-    );
-
-    // Acknowledge immediately so the sender sees the bot registered the message
-    // even if the reply takes a while.
-    await client.sendReadReceipt(roomId, event.event_id).catch(() => {});
-
-    await withTyping(client, roomId, async () => {
-      const agent = await getAgent();
-      await agent.handleMessage({ roomId, text: body, sender: event.sender, client });
+  // matrix-bot-sdk emits on a plain EventEmitter, which neither awaits nor
+  // catches the promise an async listener returns. Anything that escapes
+  // becomes an unhandledRejection, and Node terminates the process by default —
+  // so a single failed agent run would take down the bot, and with it the
+  // outbox and the hourly reports. Contain it at the boundary.
+  client.on("room.message", (roomId, event) => {
+    handleRoomMessage(client, roomId, event).catch((err) => {
+      LogService.error(
+        "bot",
+        `message handler failed in ${roomId}: ${err?.message ?? err}`,
+      );
     });
   });
 
@@ -223,12 +248,32 @@ async function main() {
   LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
 
+  // Started after sync so crypto is warm before the first spooled send.
+  const outboxCfg = config.get("outbox");
+  stopOutbox = startOutbox(client, {
+    dir: resolve(outboxCfg.dir),
+    defaultRoom: outboxCfg.defaultRoom || joined[0] || "",
+  });
+
   // Make sure agent + sync are torn down cleanly. The handoff flagged
   // `client` as undefined in this scope (defined only inside main), so capture
   // it on the module for the handler.
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
+
+// Backstop for any rejection that escapes a listener we haven't wrapped.
+// Node's default for unhandledRejection is to terminate; for a long-running bot
+// that turns one bad message into an outage. Log and keep serving instead.
+//
+// uncaughtException is deliberately NOT handled: a synchronous throw that
+// reaches the top leaves the process in an undefined state, and continuing from
+// there is worse than restarting. Let it crash and be restarted.
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  LogService.error("bot", `unhandled rejection: ${err.message}`);
+  if (err.stack) LogService.debug("bot", err.stack);
+});
 
 main().catch((err) => {
   console.error("Fatal:", err);
