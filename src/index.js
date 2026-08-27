@@ -42,6 +42,18 @@ for (const key of ["homeserver", "userId"]) {
   }
 }
 
+// BOT_CWD has no fallback in config/default.js — its default lives in the
+// committed .env. Fail loudly if neither is present: silently defaulting to
+// process.cwd() would point the agent at whatever directory the bot was
+// started from, which for this repo is the one holding its own credentials.
+if (!config.get("agent.cwd")) {
+  throw new Error(
+    "Missing config: agent.cwd (BOT_CWD). The default lives in .env — if the " +
+      "bot is started from another directory, dotenv-flow will not find it; " +
+      "set BOT_CWD explicitly in the environment.",
+  );
+}
+
 const TOKEN_PATH = resolve(storagePaths.token);
 const SYNC_PATH = resolve(storagePaths.sync);
 const CRYPTO_PATH = resolve(storagePaths.crypto);
@@ -203,6 +215,8 @@ async function main() {
   LogService.muteModule("Metrics");
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
+  // The agent's working directory must exist before pi opens a session in it.
+  mkdirSync(config.get("agent.cwd"), { recursive: true });
 
   const accessToken = await resolveAccessToken();
   const storage = new SimpleFsStorageProvider(SYNC_PATH);

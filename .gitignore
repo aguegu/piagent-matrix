@@ -10,3 +10,4 @@ sessions/
 .env.*.local
 v1-archive/
 outbox/
+workspace/

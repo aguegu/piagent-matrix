@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import dotenvFlow from "dotenv-flow";
 dotenvFlow.config();
 
@@ -47,7 +48,15 @@ export default {
     thinkingLevel: process.env.PI_THINKING_LEVEL || "low",
     // Working directory the agent operates in. Each Matrix room shares this cwd;
     // per-room cwd is intentionally out of scope for the first cut.
-    cwd: process.env.BOT_CWD || process.cwd(),
+    //
+    // No fallback on purpose: the default lives in the committed .env so it is
+    // visible where people look for it. Resolved to absolute because pi records
+    // cwd in each session header and matches it on resume — a relative value
+    // would resolve differently depending on where the bot was started.
+    // src/index.js refuses to start if this is unset, so a missing .env fails
+    // loudly rather than silently reverting to process.cwd() (the repo root,
+    // which holds the bot's credentials).
+    cwd: process.env.BOT_CWD ? resolve(process.env.BOT_CWD) : "",
     // SESSION_DIR: when set, persist each room's conversation under
     // `${SESSION_DIR}/<encoded-roomId>/` so memory survives bot restarts.
     // When empty, sessions are in-memory only and reset on every restart.
