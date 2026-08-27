@@ -1,0 +1,59 @@
+# Releases
+
+## 0.2.0 (in progress)
+
+### Breaking Changes
+
+* External senders no longer open their own Matrix client. `scripts/hourly-stats.mjs` removed; the cron wrapper `~/.local/bin/hourly-stats.sh` now spools to `OUTBOX_DIR` instead (original kept as `hourly-stats.sh.bak`)
+* Agent replies are sent with `format: org.matrix.custom.html` and a `formatted_body`
+
+### New Features
+
+* Outbox (`src/outbox.js`): spool directory the running bot watches, so other processes can post without touching the crypto store. `*.txt` uses the default room, `*.json` takes `{ room?, body, html? }`
+* Writers hand off by `rename()` into the spool, so a partial file is never read. Files process in filename order; failures are parked as `.failed` rather than retried forever
+* Messages spooled while the bot is down are sent on next start
+* `OUTBOX_DIR` and `OUTBOX_DEFAULT_ROOM` config
+* Markdown rendering (`src/markdown.js`): markdown-it with `html: false`, then sanitize-html down to the tags Matrix clients render
+
+### Fixes
+
+* **Megolm ratchet desynchronisation.** A second process sharing the bot's crypto store loaded the same outbound session and incremented its own copy of the counter, emitting different plaintexts at the same `message_index` (observed: 7 → 5 → 6 → 7, then 9 twice). Strict clients reject the duplicate as a replay — FluffyChat showed "undecryptable" where Element did not. One process now owns the crypto store
+* **Agent errors terminated the bot.** `handleMessage` rethrew into an `async` EventEmitter listener, which neither awaits nor catches, so the rejection was unhandled and Node exited. Contained at the boundary, plus a process-level `unhandledRejection` backstop
+* **A second message in one room got no reply.** pi's `prompt()` queues and returns immediately when the session is already streaming, so the caller rendered an empty buffer; its answer instead replaced the first message's text, leaving the earlier question apparently unanswered. Runs are now serialized per room
+* **Assistant text before a tool call was discarded.** The reply buffer was assigned rather than appended, and each message's `partial` covers only itself, so only the final message survived. Replies are now blocks rendered in event order, with tool lines where they actually occurred
+* `tool_execution_end` annotated the last tool line rather than the most recent unfinished one, mismarking overlapping calls
+* Tool lines bypass markdown — `_` and `*` in JSON args were being read as emphasis
+
+### Improvements
+
+* Per-room backlog cap (8) with an explicit refusal, instead of an unbounded invisible queue
+* `waitUntilIdle()` guard before prompting, so a still-streaming session can never silently produce a no-op run
+* `createSession` injection seam on `AgentManager` for testing
+* Outbox and agent errors log with context rather than failing silently
+
+### Tests
+
+* 15 tests with `node:test` — the first tests in this repo
+* Fakes are checked against the bug they cover: the serialization and rendering fakes both reproduce the original failure when run against the old logic
+
+## 0.1.0 (2026-08-26)
+
+Rewrite onto `matrix-bot-sdk`, replacing the `matrix-js-sdk` bot that could not
+persist crypto across restarts.
+
+### New Features
+
+* Matrix bot on matrix-bot-sdk with a file-based rust crypto store (SQLite), so device keys survive restarts. The previous stack offered only indexeddb or in-memory, and there is no indexeddb in Node — every boot minted a new Olm account
+* End-to-end encryption, handled transparently for encrypted and unencrypted rooms
+* Device cross-signing via `npm run cross-sign`, which reads the account's existing self-signing key from secret storage rather than resetting the identity
+* `config` + `dotenv-flow`: `.env` committed as a template, `.env.local` for real values
+* pi-coding-agent wired in, one session per room
+* Per-room session persistence under `SESSION_DIR`, so conversation memory survives restarts
+* `PI_MODEL` / `PI_THINKING_LEVEL` / `BOT_CWD` documented in the committed `.env`
+* Typing indicator and read receipts as progress feedback
+* Allowlist via `MATRIX_ALLOWED_USERS`
+
+### Fixes
+
+* Timeline handler uses `getId()` and tolerates non-`MatrixEvent` objects
+* Known-noisy `M_NOT_FOUND` HTTP errors filtered from log output — the encryption-state probe returns 404 for unencrypted rooms
