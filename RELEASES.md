@@ -39,6 +39,8 @@
 
 ### Documentation
 
+* README opens with an ordered **Getting started** walkthrough, in dependency order, plus a troubleshooting table mapping each startup error to the step that fixes it. A fresh clone previously failed one step at a time — most visibly at the first message, with `No models with complete auth are available in …`, because pi's provider must be authenticated in `PI_AGENT_DIR` rather than `~/.pi/agent`
+
 * Documented that `@matrix-org/matrix-sdk-crypto-nodejs` requires its `postinstall` to run: it ships no binary and downloads the native crypto library at install time, so a blocked install script leaves the bot unable to start
 * `SECURITY.md`: how to report a vulnerability, the agent's operational blast radius, and an assessment of the 8 `npm audit` advisories — all of which trace to `matrix-bot-sdk` depending on the deprecated `request`, are unfixable upstream, and are unreachable from this bot's code paths
 * MIT LICENSE file added. The repo previously declared ISC in `package.json` with no LICENSE file at all — which meant that once published, default copyright applied and nobody could legally use it

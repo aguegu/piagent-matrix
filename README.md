@@ -31,17 +31,97 @@ cron / scripts ──► outbox/ spool ──► the running bot ──► Matri
 - **Only this process touches the crypto store.** Anything else that needs to
   post goes through the outbox.
 
-## Setup
+## Getting started
 
-Requires Node 20+ (developed on 24).
+Requires Node 20+ (developed on 24) and a Matrix account for the bot to log in
+as. Every step below is needed on a fresh clone; skipping one fails at a
+different point, so they are in dependency order.
+
+### 1. Install
 
 ```sh
 npm install
-cp .env .env.local     # then fill in .env.local
+```
+
+If npm declines to run install scripts, approve the crypto binding — it is not
+optional, see [step 2](#2-check-the-crypto-binding-landed).
+
+### 2. Check the crypto binding landed
+
+```sh
+ls node_modules/@matrix-org/matrix-sdk-crypto-nodejs/*.node
+node -e "require('@matrix-org/matrix-sdk-crypto-nodejs'); console.log('crypto binding OK')"
+```
+
+No `.node` file means npm skipped the postinstall. Approve that one package and
+re-install:
+
+```sh
+npm install-scripts approve @matrix-org/matrix-sdk-crypto-nodejs
+npm install
+```
+
+### 3. Configure
+
+```sh
+cp .env .env.local
+$EDITOR .env.local
+```
+
+`MATRIX_HOMESERVER` and `MATRIX_USER_ID` are required; `MATRIX_PASSWORD` is
+needed for the first login and for `cross-sign`. **Set `MATRIX_ALLOWED_USERS`** —
+empty means everyone, and the agent runs shell commands.
+
+### 4. Give the agent a model provider
+
+The bot reads pi's credentials from `PI_AGENT_DIR` (default `data/pi`), *not*
+`~/.pi/agent`. Without this it starts fine and then fails on the first message
+with `No models with complete auth are available in …`.
+
+```sh
+PI_AGENT_DIR=./data/pi pi          # authenticate a provider
+# or reuse an existing login:
+mkdir -p data/pi && cp ~/.pi/agent/auth.json data/pi/
+```
+
+### 5. First start
+
+```sh
 npm start
 ```
 
-### The crypto binding needs its install script
+It logs in with `MATRIX_PASSWORD` and writes `data/token.json` (mode 0600).
+After this the password is no longer needed to run.
+
+Start it from the repo root: `dotenv-flow` resolves `.env` from the working
+directory, and relative paths in it resolve from there too.
+
+### 6. Cross-sign the device
+
+```sh
+npm run cross-sign
+```
+
+Otherwise Element shows *"Encrypted by a device not verified by its owner"* on
+everything the bot sends. Needs `MATRIX_RECOVERY_KEY` in `.env.local`. Run it
+once per fresh login — rare, since the crypto store persists.
+
+### 7. Invite and test
+
+Invite the bot from an allowlisted account; it autojoins. Send it a message.
+
+## Troubleshooting a fresh install
+
+| Symptom | Cause |
+| --- | --- |
+| `Cannot find module '…-linux-x64-gnu'` | Install script skipped — step 2 |
+| `Missing config: matrix.homeserver` | `.env.local` missing or unfilled — step 3 |
+| `Missing config: agent.cwd (BOT_CWD)` | Started from a directory where `dotenv-flow` finds no `.env` — step 5 |
+| `No models with complete auth are available in …` | pi provider not authenticated — step 4 |
+| `Allowing … — MATRIX_ALLOWED_USERS is empty` | Anyone can drive the agent — step 3 |
+| "Encrypted by a device not verified by its owner" | Not cross-signed — step 6 |
+
+## Why the crypto binding needs an install script
 
 `@matrix-org/matrix-sdk-crypto-nodejs` ships no binary. Its `postinstall`
 (`download-lib.js`) fetches a ~22 MB native library from GitHub Releases for
@@ -55,19 +135,7 @@ npm may decline to run it:
 npm warn install-scripts  @matrix-org/matrix-sdk-crypto-nodejs@0.4.0 (postinstall: node download-lib.js)
 ```
 
-Approve that one and re-install:
-
-```sh
-npm install-scripts approve @matrix-org/matrix-sdk-crypto-nodejs
-npm install
-```
-
-Then check it actually landed, before starting the bot:
-
-```sh
-ls node_modules/@matrix-org/matrix-sdk-crypto-nodejs/*.node
-node -e "require('@matrix-org/matrix-sdk-crypto-nodejs'); console.log('crypto binding OK')"
-```
+The commands are in [step 2](#2-check-the-crypto-binding-landed).
 
 The other scripts npm flags are safe to leave unapproved: `@google/genai`'s
 preinstall is a literal no-op, and `protobufjs`'s postinstall is not needed by
