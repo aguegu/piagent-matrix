@@ -35,6 +35,8 @@ export class AgentManager {
     this.opts = opts;
     // Seam for tests: swap in a fake session factory.
     this.createSession = opts.createSession ?? createAgentSession;
+    // Absolute, or null to fall back to pi's own default (~/.pi/agent).
+    this.agentDir = opts.agentDir ? resolve(opts.agentDir) : null;
     /** @type {Map<string, Promise<import('@earendil-works/pi-coding-agent').AgentSession>>} */
     this.sessions = new Map();
     /** Per-room tail of the run chain, so prompts never overlap. @type {Map<string, Promise<void>>} */
@@ -51,13 +53,27 @@ export class AgentManager {
   async #ensureModel() {
     if (this.model) return;
 
-    LogService.info("agent", "Initializing ModelRuntime...");
-    this.runtime = await ModelRuntime.create();
+    // Keep pi's credentials with the bot rather than in ~/.pi/agent, so the bot
+    // does not depend on whoever happens to be running it having logged into pi.
+    const agentDir = this.agentDir;
+    if (agentDir) mkdirSync(agentDir, { recursive: true });
+
+    LogService.info("agent", `Initializing ModelRuntime (agentDir=${agentDir ?? "pi default"})...`);
+    this.runtime = await ModelRuntime.create(
+      agentDir
+        ? {
+            authPath: resolve(agentDir, "auth.json"),
+            modelsStorePath: resolve(agentDir, "models-store.json"),
+          }
+        : undefined,
+    );
 
     const available = await this.runtime.getAvailable();
     if (available.length === 0) {
       throw new Error(
-        "No models with complete auth are available. Run `pi` interactively once to configure a provider.",
+        `No models with complete auth are available in ${agentDir ?? "~/.pi/agent"}. ` +
+          `Authenticate a provider there, e.g. PI_AGENT_DIR=${agentDir ?? "<dir>"} pi, ` +
+          `or copy an existing ~/.pi/agent/auth.json into it.`,
       );
     }
 
@@ -127,6 +143,8 @@ export class AgentManager {
       const sessionManager = this.#buildSessionManager(roomId);
       const result = await this.createSession({
         cwd: this.opts.cwd,
+        // Settings, extensions and skills load from here too, not from ~/.pi.
+        ...(this.agentDir ? { agentDir: this.agentDir } : {}),
         sessionManager,
         modelRuntime: this.runtime,
         model: this.model,

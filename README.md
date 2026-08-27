@@ -50,6 +50,17 @@ On first start the bot logs in with `MATRIX_PASSWORD` and writes
 `data/token.json` (mode 0600). After that it reuses the stored token and never
 needs the password again. Run `npm run cross-sign` once afterwards.
 
+The agent needs a model provider of its own. It reads `PI_AGENT_DIR`
+(default `data/pi`) rather than `~/.pi/agent`, so the bot does not depend on
+whoever runs it having logged into pi, and keeps working as another user or in
+a container:
+
+```sh
+PI_AGENT_DIR=./data/pi pi          # authenticate a provider
+# or, to reuse an existing login:
+cp ~/.pi/agent/auth.json data/pi/
+```
+
 Invite the bot to a room from an allowed account and it will autojoin.
 
 ## Configuration
@@ -69,6 +80,7 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
 | `PI_MODEL` | no | `provider/model-id`, or a bare id. Default: first available |
 | `PI_THINKING_LEVEL` | no | `off`…`max`. Default `low` |
+| `PI_AGENT_DIR` | no | pi's auth and settings. Default `${DATA_DIR}/pi` |
 | `BOT_CWD` | no | Working directory the agent operates in. Default `process.cwd()` |
 | `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
 | `OUTBOX_DIR` | no | Spool watched for outgoing messages. Default `./outbox` |

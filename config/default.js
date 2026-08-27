@@ -52,5 +52,10 @@ export default {
     // `${SESSION_DIR}/<encoded-roomId>/` so memory survives bot restarts.
     // When empty, sessions are in-memory only and reset on every restart.
     sessionDir: process.env.SESSION_DIR || "",
+    // pi's config directory: auth.json, models-store.json, settings.json.
+    // Defaults under DATA_DIR rather than ~/.pi/agent so the bot carries its
+    // own provider credentials — otherwise it shares them with the operator's
+    // interactive `pi`, and breaks when run as another user or in a container.
+    agentDir: process.env.PI_AGENT_DIR || `${dataDir}/pi`,
   },
 };
