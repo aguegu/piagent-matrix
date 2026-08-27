@@ -58,6 +58,8 @@
 
 ### Tests
 
+* Outbox suite: default-room routing, explicitly addressed `*.json` drops, filename ordering, delivery of messages spooled while the bot was down, and the two refusal paths — an unaddressed drop with no default room, and an orphaned `.sending` claim that must not be re-sent
+
 * 15 tests with `node:test` — the first tests in this repo
 * Fakes are checked against the bug they cover: the serialization and rendering fakes both reproduce the original failure when run against the old logic
 
