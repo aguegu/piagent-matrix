@@ -9,3 +9,4 @@ sessions/
 .env.local
 .env.*.local
 v1-archive/
+outbox/

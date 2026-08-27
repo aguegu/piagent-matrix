@@ -31,6 +31,15 @@ export default {
   logger: {
     level: process.env.LOG_LEVEL || "info",
   },
+  // Spool directory other processes (cron jobs, scripts) drop messages into for
+  // the running bot to send. Only the bot may open the crypto store: a second
+  // client sharing it desynchronises the Megolm ratchet and produces messages
+  // that conservative clients refuse to decrypt.
+  outbox: {
+    dir: process.env.OUTBOX_DIR || "./outbox",
+    // Room used for *.txt drops and for *.json without an explicit "room".
+    defaultRoom: process.env.OUTBOX_DEFAULT_ROOM || "",
+  },
   agent: {
     // PI_MODEL = "<provider>/<model-id>". If unset, picks the first available.
     model: process.env.PI_MODEL || "",
