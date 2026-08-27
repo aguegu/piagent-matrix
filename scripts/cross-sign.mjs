@@ -22,7 +22,15 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import config from "config";
 import { createClient } from "matrix-js-sdk";
+import { logger as sdkLogger } from "matrix-js-sdk/lib/logger.js";
 import { decodeRecoveryKey } from "matrix-js-sdk/lib/crypto-api/recovery-key.js";
+
+// matrix-js-sdk logs every HTTP request and the rust crypto layer is chattier
+// still, which buries this script's own progress in hundreds of lines. The run
+// reports each step and verifies the result against the server, so the SDK's
+// narration adds nothing on a good run — and on a bad one the catch block
+// prints the real error. VERBOSE=1 brings it all back.
+sdkLogger.setLevel(process.env.VERBOSE ? "debug" : "silent");
 
 const step = (msg) => console.log(`\n=== ${msg}`);
 const fail = (msg) => {

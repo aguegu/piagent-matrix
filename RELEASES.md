@@ -34,6 +34,8 @@
 
 ### Improvements
 
+* `npm run cross-sign` no longer buries its output. matrix-js-sdk logged every HTTP request and the rust crypto layer every key operation — roughly 250 lines, ending in abort errors from `stopClient()` that made a successful run look like a failure. The SDK logger is now silenced by default (`VERBOSE=1` restores it), leaving the step trace and the server-side verification
+
 * `BOT_CWD` defaults to `/tmp/piagent-workspace` in the committed `.env` rather than falling back to `process.cwd()` in code. A subdirectory rather than `/tmp` itself: `/tmp` is mode 1777, so working there directly would expose the agent's output to every user on the box and let others plant files it reads; a subdirectory the bot creates gets the bot user's own permissions. The old default pointed the agent at whatever directory the bot was started from — for this repo, the one holding `.env.local`, `data/token.json` and `data/pi/auth.json`. The directory is created on startup and resolved to an absolute path, since pi records `cwd` in each session header and matches it on resume
 * The bot refuses to start when `BOT_CWD` is unset, so a `.env` that dotenv-flow cannot find (a service started from another directory) fails loudly instead of silently reverting to the old default
 

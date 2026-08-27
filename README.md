@@ -301,7 +301,12 @@ Element does. `matrix-js-sdk` can, so it is a `devDependency` used only by
 
 ```sh
 npm run cross-sign        # defaults to the device in data/token.json
+VERBOSE=1 npm run cross-sign   # full SDK/crypto logging, if it goes wrong
 ```
+
+The run prints a step per phase and verifies the signature against the server,
+ending in `SUCCESS — device is cross-signed.` Some `[RustBackupManager]` and
+`sync …` lines still appear; they are informational.
 
 Run it once after any fresh login — a new device is never cross-signed. Since the
 crypto store persists, that is rare.
