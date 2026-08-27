@@ -20,6 +20,8 @@
 
 ### Fixes
 
+* The "no provider" error now says which of the three states it found — no `auth.json`, an empty `{}` one, or credentials that exist but are unusable. Both pi and this bot write an empty `auth.json` at startup, so an operator who opens pi and exits sees the file appear and reasonably concludes they logged in
+* Guidance now leads with `/login` rather than an API key in `.env.local`. pi accepts a pasted API key, so logging in works headless for api-key providers and keeps the credential in pi's own store instead of a project file; only OAuth needs a browser
 * Authentication instructions named the wrong environment variable. `PI_AGENT_DIR` is this bot's; the pi CLI reads `PI_CODING_AGENT_DIR` and ignores ours, so `PI_AGENT_DIR=./data/pi npx pi` wrote credentials to `~/.pi/agent` — appearing to succeed while leaving the bot with none. Corrected in the README, the `.env` template and the runtime error message, which had been repeating the wrong command back to the operator
 
 * **Megolm ratchet desynchronisation.** A second process sharing the bot's crypto store loaded the same outbound session and incremented its own copy of the counter, emitting different plaintexts at the same `message_index` (observed: 7 → 5 → 6 → 7, then 9 twice). Strict clients reject the duplicate as a replay — FluffyChat showed "undecryptable" where Element did not. One process now owns the crypto store

@@ -13,7 +13,7 @@
 //     ends. Tool-call status lines are still surfaced inline so a long tool
 //     run is visible in the final answer.
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
@@ -70,14 +70,7 @@ export class AgentManager {
 
     const available = await this.runtime.getAvailable();
     if (available.length === 0) {
-      throw new Error(
-        `No models with complete auth are available in ${agentDir ?? "~/.pi/agent"}. ` +
-          `Put a provider API key in .env.local (e.g. ANTHROPIC_API_KEY=...), or ` +
-          `log in with: PI_CODING_AGENT_DIR=${agentDir ?? "<dir>"} npx pi  ` +
-          `(that is pi's own variable — PI_AGENT_DIR is this bot's and the pi CLI ` +
-          `ignores it, writing to ~/.pi/agent instead), or copy an existing ` +
-          `~/.pi/agent/auth.json into ${agentDir ?? "<dir>"}.`,
-      );
+      throw new Error(describeMissingAuth(agentDir));
     }
 
     const want = this.opts.model; // e.g. "minimax-cn/MiniMax-M3" or bare "MiniMax-M3"
@@ -388,6 +381,52 @@ function openTextBlock(buffer) {
  * together; anything else gets a blank line so prose and tool traces read as
  * separate paragraphs.
  */
+/**
+ * Explain *why* no provider resolved, based on what is actually on disk.
+ *
+ * Both pi and ModelRuntime.create() write an empty `{}` auth.json the moment
+ * they start, so the file existing proves nothing — an operator who launches pi
+ * and exits sees auth.json appear and reasonably concludes they logged in. The
+ * three states need three different fixes, so name which one it is.
+ */
+function describeMissingAuth(agentDir) {
+  const dir = agentDir ?? "~/.pi/agent";
+  const authPath = agentDir ? resolve(agentDir, "auth.json") : "~/.pi/agent/auth.json";
+
+  let state = "missing";
+  let providers = [];
+  try {
+    const parsed = JSON.parse(readFileSync(authPath, "utf8"));
+    providers = Object.keys(parsed ?? {});
+    state = providers.length ? "populated" : "empty";
+  } catch {
+    state = "missing";
+  }
+
+  const detail =
+    state === "populated"
+      ? `${authPath} has credentials for ${providers.join(", ")}, but none are usable — ` +
+        `they may be expired, incomplete, or for a provider with no available models.`
+      : state === "empty"
+        ? `${authPath} exists but is empty ({}). Both pi and this bot create that file on ` +
+          `startup, so its presence does not mean a login succeeded — a credential only ` +
+          `lands after a /login completes.`
+        : `No auth.json in ${dir}.`;
+
+  return (
+    `No models with complete auth are available in ${dir}. ${detail}\n` +
+    `Fix it either way:\n` +
+    `  1. Log in, which stores the credential in ${authPath} — pi accepts a pasted API key, ` +
+    `so this works headless for api-key providers (only OAuth needs a browser):\n` +
+    `       PI_CODING_AGENT_DIR=${agentDir ?? "<dir>"} npx pi     then /login <provider>\n` +
+    `     Note that is pi's OWN variable. PI_AGENT_DIR is this bot's, and the pi CLI ignores ` +
+    `it — writing to ~/.pi/agent instead, which looks like success.\n` +
+    `  2. Or put a provider API key in the environment, e.g. ANTHROPIC_API_KEY=... ` +
+    `(in .env.local, or exported before starting). Fewer steps, but it puts the key in a file ` +
+    `or your shell history rather than pi's credential store.`
+  );
+}
+
 function renderReply({ blocks }) {
   const parts = [];
   let prevType = null;

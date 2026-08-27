@@ -81,21 +81,9 @@ message with `No models with complete auth are available in …`.
 
 You do not need pi installed or logged in. Pick whichever fits:
 
-**a. An API key in `.env.local`** — simplest, and all a fresh machine needs.
-`dotenv-flow` puts it in the environment and pi picks it up, writing
-`data/pi/auth.json` on first use:
-
-```sh
-echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
-```
-
-Recognised keys include `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`,
-`CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
-`XAI_API_KEY`.
-
-**b. Log in interactively** — needed for OAuth/subscription providers, where
-there is no API key to paste. pi ships as a dependency, so no global install:
+**a. Log in** — stores the credential in `data/pi/auth.json`, pi's own store,
+rather than in a project file. pi accepts a pasted API key, so this works on a
+headless host; only OAuth providers need a browser:
 
 ```sh
 PI_CODING_AGENT_DIR=./data/pi npx pi
@@ -105,6 +93,22 @@ PI_CODING_AGENT_DIR=./data/pi npx pi
 > **Note the variable.** `PI_CODING_AGENT_DIR` is pi's own; `PI_AGENT_DIR` is
 > this bot's. The pi CLI ignores `PI_AGENT_DIR` and silently writes to
 > `~/.pi/agent`, which looks like success and leaves the bot finding nothing.
+> An `auth.json` containing `{}` means exactly this — the file is created at
+> startup, so its presence does not mean a login completed.
+
+**b. An API key in the environment** — fewer steps, but it puts the key in a
+file or your shell history rather than pi's credential store. `dotenv-flow` puts
+it in the environment and pi picks it up, writing `data/pi/auth.json` on first
+use:
+
+```sh
+echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
+```
+
+Recognised keys include `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
+`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`,
+`CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
+`XAI_API_KEY`.
 
 **c. Reuse an existing login** on this machine:
 
