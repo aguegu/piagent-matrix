@@ -72,8 +72,11 @@ export class AgentManager {
     if (available.length === 0) {
       throw new Error(
         `No models with complete auth are available in ${agentDir ?? "~/.pi/agent"}. ` +
-          `Authenticate a provider there, e.g. PI_AGENT_DIR=${agentDir ?? "<dir>"} pi, ` +
-          `or copy an existing ~/.pi/agent/auth.json into it.`,
+          `Put a provider API key in .env.local (e.g. ANTHROPIC_API_KEY=...), or ` +
+          `log in with: PI_CODING_AGENT_DIR=${agentDir ?? "<dir>"} npx pi  ` +
+          `(that is pi's own variable — PI_AGENT_DIR is this bot's and the pi CLI ` +
+          `ignores it, writing to ~/.pi/agent instead), or copy an existing ` +
+          `~/.pi/agent/auth.json into ${agentDir ?? "<dir>"}.`,
       );
     }
 

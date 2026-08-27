@@ -20,6 +20,8 @@
 
 ### Fixes
 
+* Authentication instructions named the wrong environment variable. `PI_AGENT_DIR` is this bot's; the pi CLI reads `PI_CODING_AGENT_DIR` and ignores ours, so `PI_AGENT_DIR=./data/pi npx pi` wrote credentials to `~/.pi/agent` — appearing to succeed while leaving the bot with none. Corrected in the README, the `.env` template and the runtime error message, which had been repeating the wrong command back to the operator
+
 * **Megolm ratchet desynchronisation.** A second process sharing the bot's crypto store loaded the same outbound session and incremented its own copy of the counter, emitting different plaintexts at the same `message_index` (observed: 7 → 5 → 6 → 7, then 9 twice). Strict clients reject the duplicate as a replay — FluffyChat showed "undecryptable" where Element did not. One process now owns the crypto store
 * **Agent errors terminated the bot.** `handleMessage` rethrew into an `async` EventEmitter listener, which neither awaits nor catches, so the rejection was unhandled and Node exited. Contained at the boundary, plus a process-level `unhandledRejection` backstop
 * **A second message in one room got no reply.** pi's `prompt()` queues and returns immediately when the session is already streaming, so the caller rendered an empty buffer; its answer instead replaced the first message's text, leaving the earlier question apparently unanswered. Runs are now serialized per room
