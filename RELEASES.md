@@ -6,6 +6,8 @@
 
 * External senders no longer open their own Matrix client. `scripts/hourly-stats.mjs` removed; the cron wrapper `~/.local/bin/hourly-stats.sh` now spools to `OUTBOX_DIR` instead (original kept as `hourly-stats.sh.bak`)
 * Agent replies are sent with `format: org.matrix.custom.html` and a `formatted_body`
+* The agent reads its pi credentials from `PI_AGENT_DIR` (default `${DATA_DIR}/pi`) instead of `~/.pi/agent`. Existing deployments must authenticate a provider there, or copy `~/.pi/agent/auth.json` across
+* Package renamed `tradebots-matrix-v2` -> `tradebots-matrix`
 
 ### New Features
 
@@ -14,6 +16,7 @@
 * Messages spooled while the bot is down are sent on next start
 * `OUTBOX_DIR` and `OUTBOX_DEFAULT_ROOM` config
 * Markdown rendering (`src/markdown.js`): markdown-it with `html: false`, then sanitize-html down to the tags Matrix clients render
+* `PI_AGENT_DIR`: pi's auth, model cache and settings live with the bot, so it no longer depends on whoever runs it having logged into pi, and works as a service account or in a container. Verified isolated — the configured directory resolves 3 models, an empty one resolves 0
 
 ### Fixes
 
@@ -30,6 +33,11 @@
 * `waitUntilIdle()` guard before prompting, so a still-streaming session can never silently produce a no-op run
 * `createSession` injection seam on `AgentManager` for testing
 * Outbox and agent errors log with context rather than failing silently
+
+### Documentation
+
+* README rewritten around what the project is now, dropping the migration narrative. New sections for the message path, the outbox protocol, and the agent's blast radius; the config table grew from 8 rows to 14
+* The committed `.env` is a pure template again. `BOT_CWD`, `PI_MODEL` and `OUTBOX_DEFAULT_ROOM` had accumulated real values, disclosing a self-hosted homeserver, a room id and a local username. They now live in `.env.local`; effective config is unchanged
 
 ### Tests
 
