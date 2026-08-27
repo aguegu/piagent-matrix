@@ -273,6 +273,17 @@ mv "$tmp" "$OUTBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-deploy.txt"
 | `*.txt` | Body is the whole file, sent to `OUTBOX_DEFAULT_ROOM` |
 | `*.json` | `{ "room"?: "!id:server", "body": "...", "html"?: "..." }` |
 
+**Set `OUTBOX_DEFAULT_ROOM` once the bot is in more than one room.** Unset, it
+falls back to the only joined room; with several there is no defensible guess,
+so the bot refuses and logs a warning rather than picking one — unaddressed
+`*.txt` drops are then parked as `.failed`. `*.json` drops naming their own room
+always work. The fallback is resolved once at startup, so joining a room later
+does not change it.
+
+The agent is told its own room id and this protocol on the first prompt of each
+session, so asking it to "post a report here every hour" produces a `*.json`
+drop addressed to that room rather than a `*.txt` that lands in the default.
+
 Files are processed in filename order, so a timestamp prefix preserves ordering.
 Messages spooled while the bot is down go out on the next start. A failed send is
 parked as `.failed` rather than retried forever; a file left `.sending` after a

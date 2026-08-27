@@ -73,6 +73,9 @@ describe("AgentManager per-room serialization", () => {
     const client = makeFakeClient();
     const mgr = makeManager(session);
     const roomId = "!room:example.org";
+    // Steady state: the first-prompt room briefing is covered separately, and
+    // would otherwise prefix the text these assertions compare against.
+    mgr.briefed.add(roomId);
 
     // Both arrive before the first run finishes — the case that used to drop
     // the second reply entirely.
@@ -153,6 +156,7 @@ describe("session creation failures do not poison a room", () => {
       },
     });
     mgr.model = { provider: "fake", id: "fake-model" };
+    mgr.briefed.add(roomId); // steady state; see the room-context suite
 
     await assert.rejects(
       mgr.handleMessage({ roomId, text: "first", sender: "@a:example.org", client }),
@@ -170,5 +174,43 @@ describe("session creation failures do not poison a room", () => {
       ["reply to second"],
       "the retried message is answered",
     );
+  });
+});
+
+describe("room context given to the agent", () => {
+  it("tells the agent its room id on the first prompt only", async () => {
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const roomId = "!theroom:example.org";
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      outboxDir: "/srv/bot/outbox",
+      createSession: async () => ({ session }),
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    await mgr.handleMessage({ roomId, text: "first", sender: "@a:example.org", client });
+    await mgr.handleMessage({ roomId, text: "second", sender: "@a:example.org", client });
+
+    const [first, second] = session.promptsRun;
+    assert.match(first, /!theroom:example\.org/, "the first prompt names the room");
+    assert.match(first, /\/srv\/bot\/outbox/, "and how to send to it later");
+    assert.match(first, /Never open your own Matrix client/, "and the constraint that makes it necessary");
+    assert.ok(first.endsWith("first"), "the user's text is preserved at the end");
+
+    assert.equal(second, "second", "later prompts carry no preamble");
+  });
+
+  it("omits the outbox instructions when no outbox is configured", async () => {
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const mgr = new AgentManager({ cwd: process.cwd(), createSession: async () => ({ session }) });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    await mgr.handleMessage({ roomId: "!r:example.org", text: "hi", sender: "@a:example.org", client });
+
+    const [first] = session.promptsRun;
+    assert.match(first, /!r:example\.org/, "still names the room");
+    assert.doesNotMatch(first, /rename\(\)/, "but promises no send mechanism it does not have");
   });
 });

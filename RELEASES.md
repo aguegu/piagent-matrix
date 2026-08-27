@@ -34,6 +34,9 @@
 
 ### Improvements
 
+* The agent is told which room it is in, on the first prompt of each session, along with how to reach that room later through the outbox. It previously received only the message text, so "post this here" or "set up a cron that reports here" were unanswerable — anything it scheduled wrote a `*.txt`, which goes to the configured default room regardless of where the request was made
+* The outbox default room no longer guesses. With one joined room it still falls back to it; with several it refuses and warns, since `getJoinedRooms()` has no meaningful order and picking the first would deliver reports to an arbitrary room while appearing to work
+
 * `npm run cross-sign` no longer buries its output. matrix-js-sdk logged every HTTP request and the rust crypto layer every key operation — roughly 250 lines, ending in abort errors from `stopClient()` that made a successful run look like a failure. The SDK logger is now silenced by default (`VERBOSE=1` restores it), leaving the step trace and the server-side verification
 
 * `BOT_CWD` defaults to `/tmp/piagent-workspace` in the committed `.env` rather than falling back to `process.cwd()` in code. A subdirectory rather than `/tmp` itself: `/tmp` is mode 1777, so working there directly would expose the agent's output to every user on the box and let others plant files it reads; a subdirectory the bot creates gets the bot user's own permissions. The old default pointed the agent at whatever directory the bot was started from — for this repo, the one holding `.env.local`, `data/token.json` and `data/pi/auth.json`. The directory is created on startup and resolved to an absolute path, since pi records `cwd` in each session header and matches it on resume

@@ -179,6 +179,40 @@ async function shutdown(signal) {
 }
 
 /**
+ * Pick the room that unaddressed (*.txt) outbox drops go to.
+ *
+ * Falling back to the only joined room is a convenience for the common
+ * single-room deployment. With several rooms there is no defensible guess:
+ * getJoinedRooms() has no meaningful order, so picking the first would send
+ * reports to an arbitrary room and look like it worked. Refuse instead —
+ * unaddressed drops then fail visibly as .failed, and *.json drops naming their
+ * own room keep working either way.
+ */
+function resolveDefaultRoom(configured, joined) {
+  if (configured) return configured;
+  if (joined.length === 1) {
+    LogService.info("bot", `Outbox default room defaulting to the only joined room ${joined[0]}.`);
+    return joined[0];
+  }
+  if (joined.length === 0) {
+    LogService.warn(
+      "bot",
+      "Outbox has no default room: OUTBOX_DEFAULT_ROOM is unset and the bot has joined no rooms. " +
+        "Unaddressed *.txt drops will be parked as .failed. Note this is resolved once at startup, " +
+        "so joining a room later will not change it — restart, or set OUTBOX_DEFAULT_ROOM.",
+    );
+    return "";
+  }
+  LogService.warn(
+    "bot",
+    `Outbox has no default room: OUTBOX_DEFAULT_ROOM is unset and the bot is in ${joined.length} rooms, ` +
+      "so there is no safe guess. Unaddressed *.txt drops will be parked as .failed; " +
+      "*.json drops naming their own room are unaffected. Set OUTBOX_DEFAULT_ROOM to choose one.",
+  );
+  return "";
+}
+
+/**
  * Handle one incoming room message. Errors propagate to the caller, which is
  * responsible for catching them — see the `room.message` registration.
  */
@@ -266,7 +300,7 @@ async function main() {
   const outboxCfg = config.get("outbox");
   stopOutbox = startOutbox(client, {
     dir: resolve(outboxCfg.dir),
-    defaultRoom: outboxCfg.defaultRoom || joined[0] || "",
+    defaultRoom: resolveDefaultRoom(outboxCfg.defaultRoom, joined),
   });
 
   // Make sure agent + sync are torn down cleanly. The handoff flagged

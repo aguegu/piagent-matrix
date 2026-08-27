@@ -43,6 +43,8 @@ export class AgentManager {
     this.chains = new Map();
     /** Per-room count of messages queued or running. @type {Map<string, number>} */
     this.pending = new Map();
+    /** Rooms already told where they are. @type {Set<string>} */
+    this.briefed = new Set();
     /** @type {import('@earendil-works/pi-coding-agent').ModelRuntime | null} */
     this.runtime = null;
     /** @type {import('@earendil-works/pi-coding-agent').Model<any> | null} */
@@ -114,6 +116,34 @@ export class AgentManager {
       `Using model ${this.model.provider}/${this.model.id}` +
         ` (thinkingLevel=${this.#thinkingLevel()})`,
     );
+  }
+
+  /**
+   * Context prepended to the first prompt of each room's session.
+   *
+   * Only the outbox is offered as a send mechanism. The agent must not open its
+   * own Matrix client: two processes sharing the crypto store desynchronise the
+   * Megolm ratchet and produce messages strict clients refuse to decrypt.
+   */
+  #brief(roomId) {
+    const outboxDir = this.opts.outboxDir ? resolve(this.opts.outboxDir) : null;
+    const lines = [
+      "[context]",
+      `You are replying in Matrix room ${roomId}. "here" and "this room" mean that room id.`,
+    ];
+    if (outboxDir) {
+      lines.push(
+        `To send a message to a room later — from a cron job or script you write — put a file in ${outboxDir}:`,
+        `  write it elsewhere first, then rename() it in, so a partial file is never read;`,
+        `  name it <timestamp>-<label>.json and put {"room": "<room id>", "body": "..."} in it;`,
+        `  use "room": "${roomId}" to reach this room. A plain .txt file goes to the configured`,
+        `  default room instead, which may not be this one.`,
+        "Never open your own Matrix client: only the bot process may touch the crypto store,",
+        "and a second writer corrupts encryption for everyone in the room.",
+      );
+    }
+    lines.push("[/context]", "");
+    return lines.join("\n");
   }
 
   #thinkingLevel() {
@@ -249,8 +279,15 @@ export class AgentManager {
 
     const unsub = session.subscribe((event) => this.#onEvent(event, buffer));
 
+    // The agent is otherwise given only the message text, so it has no way to
+    // know which room it is in — "post this here" or "set up a cron that
+    // reports here" are unanswerable. Tell it once per session, along with the
+    // one mechanism it can actually use to send something later.
+    const prompt = this.briefed.has(roomId) ? text : this.#brief(roomId) + text;
+    this.briefed.add(roomId);
+
     try {
-      await session.prompt(text, { streamingBehavior: "followUp" });
+      await session.prompt(prompt, { streamingBehavior: "followUp" });
     } catch (err) {
       LogService.error("agent", `prompt failed in ${roomId}: ${err?.message ?? err}`);
       const note = `⚠️ ${err?.message ?? String(err)}`;

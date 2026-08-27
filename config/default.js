@@ -66,5 +66,7 @@ export default {
     // own provider credentials — otherwise it shares them with the operator's
     // interactive `pi`, and breaks when run as another user or in a container.
     agentDir: process.env.PI_AGENT_DIR || `${dataDir}/pi`,
+    // Told to the agent so it can address messages it schedules for later.
+    outboxDir: process.env.OUTBOX_DIR || "./outbox",
   },
 };
