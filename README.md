@@ -270,7 +270,7 @@ mv "$tmp" "$OUTBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-deploy.txt"
 
 | File | Meaning |
 | --- | --- |
-| `*.txt` | Body is the whole file, sent to `OUTBOX_DEFAULT_ROOM` |
+| `*.txt` | Body is the whole file, sent to the [main room](#the-main-room) |
 | `*.json` | `{ "room"?: "!id:server", "body": "...", "html"?: "..." }` |
 
 Unaddressed `*.txt` drops go to the bot's **main room** (below). `*.json` drops

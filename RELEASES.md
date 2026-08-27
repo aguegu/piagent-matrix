@@ -4,7 +4,6 @@
 
 ### Breaking Changes
 
-* `OUTBOX_DEFAULT_ROOM` is replaced by the **main room**, recorded in `data/main-room.json` rather than configured. The old variable is still read as a deprecated alias, so existing deployments keep working; `MATRIX_MAIN_ROOM` is the new name and is normally left unset
 
 * External senders no longer open their own Matrix client. `scripts/hourly-stats.mjs` removed; the cron wrapper `~/.local/bin/hourly-stats.sh` now spools to `OUTBOX_DIR` instead (original kept as `hourly-stats.sh.bak`)
 * Agent replies are sent with `format: org.matrix.custom.html` and a `formatted_body`
@@ -18,7 +17,7 @@
 * Outbox (`src/outbox.js`): spool directory the running bot watches, so other processes can post without touching the crypto store. `*.txt` uses the default room, `*.json` takes `{ room?, body, html? }`
 * Writers hand off by `rename()` into the spool, so a partial file is never read. Files process in filename order; failures are parked as `.failed` rather than retried forever
 * Messages spooled while the bot is down are sent on next start
-* `OUTBOX_DIR` and `OUTBOX_DEFAULT_ROOM` config
+* `OUTBOX_DIR` config
 * Markdown rendering (`src/markdown.js`): markdown-it with `html: false`, then sanitize-html down to the tags Matrix clients render
 * `PI_AGENT_DIR`: pi's auth, model cache and settings live with the bot, so it no longer depends on whoever runs it having logged into pi, and works as a service account or in a container. Verified isolated — the configured directory resolves 3 models, an empty one resolves 0
 
@@ -61,7 +60,7 @@
 * MIT LICENSE file added. The repo previously declared ISC in `package.json` with no LICENSE file at all — which meant that once published, default copyright applied and nobody could legally use it
 
 * README rewritten around what the project is now, dropping the migration narrative. New sections for the message path, the outbox protocol, and the agent's blast radius; the config table grew from 8 rows to 14
-* The committed `.env` is a pure template again. `BOT_CWD`, `PI_MODEL` and `OUTBOX_DEFAULT_ROOM` had accumulated real values, disclosing a self-hosted homeserver, a room id and a local username. They now live in `.env.local`; effective config is unchanged
+* The committed `.env` is a pure template again. `BOT_CWD`, `PI_MODEL` and the outbox room had accumulated real values, disclosing a self-hosted homeserver, a room id and a local username. They now live in `.env.local`; effective config is unchanged
 
 ### Tests
 

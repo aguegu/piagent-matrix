@@ -16,9 +16,8 @@ export default {
     recoveryKey: process.env.MATRIX_RECOVERY_KEY || "",
     // The bot's control channel — normally the first room it was invited to, and
     // recorded in data/main-room.json rather than configured. Set this only to
-    // pin a different room. OUTBOX_DEFAULT_ROOM is the former name, still read
-    // so existing deployments keep working.
-    mainRoom: process.env.MATRIX_MAIN_ROOM || process.env.OUTBOX_DEFAULT_ROOM || "",
+    // pin a different room.
+    mainRoom: process.env.MATRIX_MAIN_ROOM || "",
     // Empty list means "allow everyone", which the bot warns about on each message.
     allowedUsers: (process.env.MATRIX_ALLOWED_USERS || "")
       .split(",")
