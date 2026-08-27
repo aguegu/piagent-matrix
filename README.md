@@ -262,11 +262,25 @@ ends up covering two different plaintexts.
 Instead, drop a file in the outbox and the running bot sends it:
 
 ```sh
-# Write elsewhere first, then rename() in — the bot must never see a partial file.
-tmp="$OUTBOX_DIR/.tmp-$$"
-printf 'deploy finished\n' > "$tmp"
-mv "$tmp" "$OUTBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-deploy.txt"
+# Write a dotfile inside the spool (the bot skips dotfiles, and it is the same
+# filesystem so rename is atomic), then rename it in.
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+tmp="$OUTBOX_DIR/.tmp-$stamp.$$"
+
+# Addressed — records the destination at write time. Reading the bot's own
+# main room keeps the two in step without configuring it twice.
+room=$(jq -r '.roomId // empty' "$BOT_DIR/data/main-room.json")
+jq -n --arg room "$room" --arg body 'deploy finished' '{room: $room, body: $body}' > "$tmp"
+mv "$tmp" "$OUTBOX_DIR/$stamp-deploy.json"
+
+# Or unaddressed, letting the bot route it to its main room:
+#   printf 'deploy finished\n' > "$tmp"
+#   mv "$tmp" "$OUTBOX_DIR/$stamp-deploy.txt"
 ```
+
+Prefer `*.json` for anything scheduled. A `*.txt` is resolved against the main
+room when the bot drains the spool, so a report written now lands wherever the
+main room happens to be then; a `*.json` lands where it was addressed.
 
 | File | Meaning |
 | --- | --- |
