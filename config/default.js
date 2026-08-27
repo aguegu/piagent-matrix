@@ -14,6 +14,11 @@ export default {
     // matrix-bot-sdk has no secret-storage support, so the provisioning script
     // needs the recovery key to unlock the account's self-signing key.
     recoveryKey: process.env.MATRIX_RECOVERY_KEY || "",
+    // The bot's control channel — normally the first room it was invited to, and
+    // recorded in data/main-room.json rather than configured. Set this only to
+    // pin a different room. OUTBOX_DEFAULT_ROOM is the former name, still read
+    // so existing deployments keep working.
+    mainRoom: process.env.MATRIX_MAIN_ROOM || process.env.OUTBOX_DEFAULT_ROOM || "",
     // Empty list means "allow everyone", which the bot warns about on each message.
     allowedUsers: (process.env.MATRIX_ALLOWED_USERS || "")
       .split(",")
@@ -38,8 +43,7 @@ export default {
   // that conservative clients refuse to decrypt.
   outbox: {
     dir: process.env.OUTBOX_DIR || "./outbox",
-    // Room used for *.txt drops and for *.json without an explicit "room".
-    defaultRoom: process.env.OUTBOX_DEFAULT_ROOM || "",
+    // Unaddressed *.txt drops go to the main room; see matrix.mainRoom.
   },
   agent: {
     // PI_MODEL = "<provider>/<model-id>". If unset, picks the first available.

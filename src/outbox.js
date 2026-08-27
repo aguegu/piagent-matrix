@@ -28,14 +28,26 @@ import { LogService } from "matrix-bot-sdk";
 const CLAIM_SUFFIX = ".sending";
 const FAILED_SUFFIX = ".failed";
 
+/**
+ * @param {object} opts
+ * @param {string} opts.dir  spool directory
+ * @param {string|(() => string)} opts.defaultRoom  the main room for unaddressed
+ *   drops. A function is read per send, so a main room adopted after startup
+ *   takes effect without a restart.
+ */
 export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } = {}) {
+  const readDefaultRoom = () =>
+    (typeof defaultRoom === "function" ? defaultRoom() : defaultRoom) || "";
   if (!dir) {
     LogService.info("outbox", "No outbox dir configured — outbox disabled.");
     return () => {};
   }
 
   mkdirSync(dir, { recursive: true });
-  LogService.info("outbox", `Watching ${dir}${defaultRoom ? ` (default room ${defaultRoom})` : ""}`);
+  LogService.info(
+    "outbox",
+    `Watching ${dir}${readDefaultRoom() ? ` (main room ${readDefaultRoom()})` : " — no main room yet"}`,
+  );
 
   // A file left claimed means we died mid-send. We cannot tell whether it
   // reached the server, and re-sending risks a duplicate, so park it.
@@ -75,8 +87,13 @@ export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } =
         }
 
         try {
-          const { room, body, html } = parsePayload(name, readFileSync(claimed, "utf8"), defaultRoom);
-          if (!room) throw new Error("no room specified and no default room configured");
+          const { room, body, html } = parsePayload(name, readFileSync(claimed, "utf8"), readDefaultRoom());
+          if (!room) {
+            throw new Error(
+              "no room in the file and no main room established — name the room in a " +
+                ".json drop, or set one (see MATRIX_MAIN_ROOM)",
+            );
+          }
           if (!body.trim()) throw new Error("empty body");
 
           const content = { msgtype: "m.text", body };

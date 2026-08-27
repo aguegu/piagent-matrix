@@ -136,8 +136,8 @@ export class AgentManager {
         `To send a message to a room later — from a cron job or script you write — put a file in ${outboxDir}:`,
         `  write it elsewhere first, then rename() it in, so a partial file is never read;`,
         `  name it <timestamp>-<label>.json and put {"room": "<room id>", "body": "..."} in it;`,
-        `  use "room": "${roomId}" to reach this room. A plain .txt file goes to the configured`,
-        `  default room instead, which may not be this one.`,
+        `  use "room": "${roomId}" to reach this room. A plain .txt file goes to the bot's`,
+        `  main room instead, which may not be this one.`,
         "Never open your own Matrix client: only the bot process may touch the crypto store,",
         "and a second writer corrupts encryption for everyone in the room.",
       );

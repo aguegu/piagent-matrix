@@ -26,6 +26,7 @@ import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
 import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
+import { MainRoom } from "./main-room.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -147,6 +148,8 @@ function isAllowed(sender) {
 let agentPromise = null;
 let botClient = null;
 let stopOutbox = null;
+/** @type {MainRoom | null} */
+let mainRoom = null;
 function getAgent() {
   if (!agentPromise) {
     const opts = config.get("agent");
@@ -176,40 +179,6 @@ async function shutdown(signal) {
     /* ignore */
   }
   process.exit(0);
-}
-
-/**
- * Pick the room that unaddressed (*.txt) outbox drops go to.
- *
- * Falling back to the only joined room is a convenience for the common
- * single-room deployment. With several rooms there is no defensible guess:
- * getJoinedRooms() has no meaningful order, so picking the first would send
- * reports to an arbitrary room and look like it worked. Refuse instead —
- * unaddressed drops then fail visibly as .failed, and *.json drops naming their
- * own room keep working either way.
- */
-function resolveDefaultRoom(configured, joined) {
-  if (configured) return configured;
-  if (joined.length === 1) {
-    LogService.info("bot", `Outbox default room defaulting to the only joined room ${joined[0]}.`);
-    return joined[0];
-  }
-  if (joined.length === 0) {
-    LogService.warn(
-      "bot",
-      "Outbox has no default room: OUTBOX_DEFAULT_ROOM is unset and the bot has joined no rooms. " +
-        "Unaddressed *.txt drops will be parked as .failed. Note this is resolved once at startup, " +
-        "so joining a room later will not change it — restart, or set OUTBOX_DEFAULT_ROOM.",
-    );
-    return "";
-  }
-  LogService.warn(
-    "bot",
-    `Outbox has no default room: OUTBOX_DEFAULT_ROOM is unset and the bot is in ${joined.length} rooms, ` +
-      "so there is no safe guess. Unaddressed *.txt drops will be parked as .failed; " +
-      "*.json drops naming their own room are unaffected. Set OUTBOX_DEFAULT_ROOM to choose one.",
-  );
-  return "";
 }
 
 /**
@@ -249,6 +218,7 @@ async function main() {
   LogService.muteModule("Metrics");
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
+  mainRoom = new MainRoom(resolve(storagePaths.dataDir), matrix.mainRoom);
   // The agent's working directory must exist before pi opens a session in it.
   mkdirSync(config.get("agent.cwd"), { recursive: true });
 
@@ -267,6 +237,14 @@ async function main() {
   client.on("room.join", async (roomId) => {
     const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
     LogService.info("bot", `Joined ${roomId} (encrypted=${encrypted}).`);
+
+    // First room in becomes the control channel. Recorded here rather than
+    // derived at startup, because join order cannot be recovered afterwards —
+    // and so a bot invited after it started picks it up without a restart.
+    if (mainRoom?.adopt(roomId, "first room joined")) {
+      const members = await client.getJoinedRoomMembers(roomId).catch(() => null);
+      mainRoom.checkMembership(roomId, members?.length);
+    }
   });
 
   // A decryption failure means the sender never shared a Megolm session with
@@ -296,11 +274,15 @@ async function main() {
   LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
 
+  mainRoom.settleOnStartup(joined);
+
   // Started after sync so crypto is warm before the first spooled send.
+  // The main room is read per send, not captured here, so a room adopted later
+  // takes effect immediately.
   const outboxCfg = config.get("outbox");
   stopOutbox = startOutbox(client, {
     dir: resolve(outboxCfg.dir),
-    defaultRoom: resolveDefaultRoom(outboxCfg.defaultRoom, joined),
+    defaultRoom: () => mainRoom.roomId,
   });
 
   // Make sure agent + sync are torn down cleanly. The handoff flagged

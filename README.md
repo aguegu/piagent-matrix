@@ -236,6 +236,7 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `MATRIX_PASSWORD` | first run | Initial login, and `cross-sign` |
 | `MATRIX_ALLOWED_USERS` | no | Comma-separated MXIDs. **Empty means everyone is allowed** |
 | `MATRIX_DEVICE_NAME` | no | Shown in Element's session list |
+| `MATRIX_MAIN_ROOM` | no | Pins the main room. Normally unset — see below |
 | `MATRIX_RECOVERY_KEY` | no | Only for `npm run cross-sign`; the bot never reads it |
 | `DATA_DIR` | no | Identity and crypto store. Default `./data` |
 | `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
@@ -245,7 +246,6 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `/tmp/piagent-workspace`; the bot refuses to start if unset |
 | `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
 | `OUTBOX_DIR` | no | Spool watched for outgoing messages. Default `./outbox` |
-| `OUTBOX_DEFAULT_ROOM` | no | Room for `*.txt` drops |
 
 `MATRIX_HOMESERVER` and `MATRIX_USER_ID` are checked explicitly at startup:
 `config.get()` alone would not catch them, because the template defines every
@@ -273,12 +273,8 @@ mv "$tmp" "$OUTBOX_DIR/$(date -u +%Y%m%dT%H%M%SZ)-deploy.txt"
 | `*.txt` | Body is the whole file, sent to `OUTBOX_DEFAULT_ROOM` |
 | `*.json` | `{ "room"?: "!id:server", "body": "...", "html"?: "..." }` |
 
-**Set `OUTBOX_DEFAULT_ROOM` once the bot is in more than one room.** Unset, it
-falls back to the only joined room; with several there is no defensible guess,
-so the bot refuses and logs a warning rather than picking one — unaddressed
-`*.txt` drops are then parked as `.failed`. `*.json` drops naming their own room
-always work. The fallback is resolved once at startup, so joining a room later
-does not change it.
+Unaddressed `*.txt` drops go to the bot's **main room** (below). `*.json` drops
+naming their own room always work, main room or not.
 
 The agent is told its own room id and this protocol on the first prompt of each
 session, so asking it to "post a report here every hour" produces a `*.json`
@@ -289,6 +285,32 @@ Messages spooled while the bot is down go out on the next start. A failed send i
 parked as `.failed` rather than retried forever; a file left `.sending` after a
 crash is parked too, since we cannot tell whether it reached the server and
 re-sending risks a duplicate.
+
+## The main room
+
+The bot's control channel: normally the room holding just the bot and its admin.
+Unaddressed `*.txt` outbox drops go here, and it is where operational output
+belongs.
+
+**It is recorded, not configured.** The first room the bot is invited to becomes
+the main room, written to `data/main-room.json`. That has to be observed at join
+time — `getJoinedRooms()` has no meaningful order, so "first" cannot be
+recovered afterwards.
+
+| Situation | What happens |
+| --- | --- |
+| First invite | That room is adopted and recorded |
+| Existing bot, one joined room | Adopted at startup and recorded |
+| Existing bot, several joined rooms | Refuses to guess; warns. Set `MATRIX_MAIN_ROOM` or write the id into `data/main-room.json` |
+| `MATRIX_MAIN_ROOM` set | Pins that room; nothing observed overrides it |
+
+To re-elect — the first invite was a scratch room, say — delete
+`data/main-room.json` and re-invite, or set `MATRIX_MAIN_ROOM`.
+
+The main room is read per send rather than captured at startup, so a bot started
+before it was invited anywhere picks one up as soon as it joins, with no
+restart. It warns if the main room has more than two members, since that
+suggests the invite was not the private admin channel it is meant to be.
 
 ## Scripts
 

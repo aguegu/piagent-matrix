@@ -117,3 +117,33 @@ describe("outbox", () => {
     );
   });
 });
+
+describe("outbox reads the main room per send", () => {
+  let dir;
+  let stop;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "outbox-late-")); });
+  afterEach(() => { stop?.(); stop = undefined; rmSync(dir, { recursive: true, force: true }); });
+
+  it("delivers to a main room adopted after startup, without a restart", async () => {
+    // Reproduces a bot started before it was invited anywhere: at startup there
+    // is no main room, and the first invite establishes one while it runs.
+    let mainRoom = "";
+    const client = fakeClient();
+    stop = startOutbox(client, { dir, defaultRoom: () => mainRoom, pollMs: 100 });
+
+    spool(dir, "20260101T000001Z-early.txt", "before any room");
+    await sleep(400);
+    assert.equal(client.sent.length, 0, "nothing to send to yet");
+
+    mainRoom = "!adopted:example.org"; // the bot gets invited
+
+    spool(dir, "20260101T000002Z-later.txt", "after the invite");
+    await settle(dir);
+
+    assert.deepEqual(
+      client.sent.map((m) => m.roomId),
+      ["!adopted:example.org"],
+      "the later drop goes to the newly adopted room",
+    );
+  });
+});

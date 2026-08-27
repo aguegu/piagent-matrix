@@ -4,12 +4,16 @@
 
 ### Breaking Changes
 
+* `OUTBOX_DEFAULT_ROOM` is replaced by the **main room**, recorded in `data/main-room.json` rather than configured. The old variable is still read as a deprecated alias, so existing deployments keep working; `MATRIX_MAIN_ROOM` is the new name and is normally left unset
+
 * External senders no longer open their own Matrix client. `scripts/hourly-stats.mjs` removed; the cron wrapper `~/.local/bin/hourly-stats.sh` now spools to `OUTBOX_DIR` instead (original kept as `hourly-stats.sh.bak`)
 * Agent replies are sent with `format: org.matrix.custom.html` and a `formatted_body`
 * The agent reads its pi credentials from `PI_AGENT_DIR` (default `${DATA_DIR}/pi`) instead of `~/.pi/agent`. Existing deployments must authenticate a provider there, or copy `~/.pi/agent/auth.json` across
 * Package renamed `tradebots-matrix-v2` -> `piagent-matrix`, and marked `private` so it can never be published to npm by accident
 
 ### New Features
+
+* Main room (`src/main-room.js`): the bot's control channel, adopted from the first room it is invited to and recorded on disk. Join order cannot be recovered from `getJoinedRooms()`, so it is observed at join time. An existing bot with exactly one room adopts it at startup; with several it refuses to guess and says so. Read per send, so a bot invited after it started picks one up without a restart, which also removes the old startup-order trap
 
 * Outbox (`src/outbox.js`): spool directory the running bot watches, so other processes can post without touching the crypto store. `*.txt` uses the default room, `*.json` takes `{ room?, body, html? }`
 * Writers hand off by `rename()` into the spool, so a partial file is never read. Files process in filename order; failures are parked as `.failed` rather than retried forever
