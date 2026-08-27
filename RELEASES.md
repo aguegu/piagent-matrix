@@ -7,7 +7,7 @@
 * External senders no longer open their own Matrix client. `scripts/hourly-stats.mjs` removed; the cron wrapper `~/.local/bin/hourly-stats.sh` now spools to `OUTBOX_DIR` instead (original kept as `hourly-stats.sh.bak`)
 * Agent replies are sent with `format: org.matrix.custom.html` and a `formatted_body`
 * The agent reads its pi credentials from `PI_AGENT_DIR` (default `${DATA_DIR}/pi`) instead of `~/.pi/agent`. Existing deployments must authenticate a provider there, or copy `~/.pi/agent/auth.json` across
-* Package renamed `tradebots-matrix-v2` -> `tradebots-matrix`
+* Package renamed `tradebots-matrix-v2` -> `piagent-matrix`, and marked `private` so it can never be published to npm by accident
 
 ### New Features
 

@@ -1,7 +1,8 @@
 {
-  "name": "tradebots-matrix",
+  "name": "piagent-matrix",
   "version": "0.2.0",
-  "description": "Matrix bot fronting the pi coding agent, with E2EE and a persistent crypto store.",
+  "private": true,
+  "description": "Talk to the pi coding agent from any Matrix client — end-to-end encrypted, with a persistent crypto store.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

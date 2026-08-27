@@ -101,7 +101,7 @@ Read from env via `config/default.js` (the `node-config` package, with
 | `MATRIX_HOMESERVER` | (required)                    | `matrix.homeserver`            |
 | `MATRIX_USER_ID`    | (required)                    | bot MXID                       |
 | `MATRIX_PASSWORD`   | (only first login)            | `matrix.password`              |
-| `MATRIX_DEVICE_NAME`| `tradebots-matrix`         | shown in Element session list  |
+| `MATRIX_DEVICE_NAME`| `piagent-matrix`         | shown in Element session list  |
 | `MATRIX_ALLOWED_USERS` | (warns if empty)           | per-message sender filter      |
 | `DATA_DIR`          | `./data`                      | token / sync / crypto location |
 | `MATRIX_RECOVERY_KEY` | (only used by `npm run cross-sign`) | unlock 4S for cross-signing |

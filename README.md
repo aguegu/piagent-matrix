@@ -1,4 +1,4 @@
-# tradebots-matrix
+# piagent-matrix
 
 A Matrix bot that fronts the [pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
 over instant messaging. Message it from an allowlisted account and your text

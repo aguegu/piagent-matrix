@@ -8,7 +8,7 @@ export default {
     homeserver: process.env.MATRIX_HOMESERVER,
     userId: process.env.MATRIX_USER_ID,
     password: process.env.MATRIX_PASSWORD,
-    deviceName: process.env.MATRIX_DEVICE_NAME || "tradebots-matrix",
+    deviceName: process.env.MATRIX_DEVICE_NAME || "piagent-matrix",
     // Only used by `npm run cross-sign`; the bot itself never reads this.
     // matrix-bot-sdk has no secret-storage support, so the provisioning script
     // needs the recovery key to unlock the account's self-signing key.
