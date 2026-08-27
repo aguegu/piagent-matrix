@@ -36,6 +36,8 @@
 
 ### Documentation
 
+* MIT LICENSE file added. The repo previously declared ISC in `package.json` with no LICENSE file at all — which meant that once published, default copyright applied and nobody could legally use it
+
 * README rewritten around what the project is now, dropping the migration narrative. New sections for the message path, the outbox protocol, and the agent's blast radius; the config table grew from 8 rows to 14
 * The committed `.env` is a pure template again. `BOT_CWD`, `PI_MODEL` and `OUTBOX_DEFAULT_ROOM` had accumulated real values, disclosing a self-hosted homeserver, a room id and a local username. They now live in `.env.local`; effective config is unchanged
 

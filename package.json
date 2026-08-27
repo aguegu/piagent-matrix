@@ -10,7 +10,7 @@
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "cross-sign": "node scripts/cross-sign.mjs"
   },
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.3",
     "config": "^5.0.1",
