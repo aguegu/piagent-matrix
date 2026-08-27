@@ -36,6 +36,7 @@
 
 ### Documentation
 
+* `SECURITY.md`: how to report a vulnerability, the agent's operational blast radius, and an assessment of the 8 `npm audit` advisories — all of which trace to `matrix-bot-sdk` depending on the deprecated `request`, are unfixable upstream, and are unreachable from this bot's code paths
 * MIT LICENSE file added. The repo previously declared ISC in `package.json` with no LICENSE file at all — which meant that once published, default copyright applied and nobody could legally use it
 
 * README rewritten around what the project is now, dropping the migration narrative. New sections for the message path, the outbox protocol, and the agent's blast radius; the config table grew from 8 rows to 14

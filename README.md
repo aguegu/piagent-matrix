@@ -199,6 +199,9 @@ sessions/               per-room agent history      (gitignored)
 
 ## Blast radius
 
+See [SECURITY.md](SECURITY.md) for the full picture, including the dependency
+advisories `npm audit` reports and why they are not reachable here.
+
 The agent runs with pi's default toolset — **read, bash, edit, write, with no
 approval gate** — in `BOT_CWD`. Anyone who can message the bot can therefore run
 shell commands and modify files there, including the bot's own source.
