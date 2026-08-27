@@ -16,6 +16,7 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
+import { escapeHtml, renderMarkdown } from "./markdown.js";
 import {
   createAgentSession,
   ModelRuntime,
@@ -24,12 +25,22 @@ import {
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
+// Beyond this many messages waiting on one room we start refusing, rather than
+// letting a burst build an unbounded backlog the sender has no visibility into.
+const MAX_QUEUED_PER_ROOM = 8;
+
 export class AgentManager {
-  /** @param {{ model?: string, thinkingLevel?: string, cwd: string }} opts */
+  /** @param {{ model?: string, thinkingLevel?: string, cwd: string, createSession?: Function }} opts */
   constructor(opts) {
     this.opts = opts;
+    // Seam for tests: swap in a fake session factory.
+    this.createSession = opts.createSession ?? createAgentSession;
     /** @type {Map<string, Promise<import('@earendil-works/pi-coding-agent').AgentSession>>} */
     this.sessions = new Map();
+    /** Per-room tail of the run chain, so prompts never overlap. @type {Map<string, Promise<void>>} */
+    this.chains = new Map();
+    /** Per-room count of messages queued or running. @type {Map<string, number>} */
+    this.pending = new Map();
     /** @type {import('@earendil-works/pi-coding-agent').ModelRuntime | null} */
     this.runtime = null;
     /** @type {import('@earendil-works/pi-coding-agent').Model<any> | null} */
@@ -114,7 +125,7 @@ export class AgentManager {
     p = (async () => {
       await this.#ensureModel();
       const sessionManager = this.#buildSessionManager(roomId);
-      const result = await createAgentSession({
+      const result = await this.createSession({
         cwd: this.opts.cwd,
         sessionManager,
         modelRuntime: this.runtime,
@@ -162,16 +173,55 @@ export class AgentManager {
    * @param {string} ctx.sender
    * @param {import('matrix-bot-sdk').MatrixClient} ctx.client
    */
-  async handleMessage({ roomId, text, sender, client }) {
+  async handleMessage(ctx) {
+    const { roomId } = ctx;
+
+    const depth = this.pending.get(roomId) ?? 0;
+    if (depth >= MAX_QUEUED_PER_ROOM) {
+      LogService.warn("agent", `queue full for ${roomId} (${depth}); dropping message`);
+      await this.#post(ctx.client, roomId, `_Still working through ${depth} earlier message(s) — this one was dropped. Try again shortly._`);
+      return;
+    }
+    this.pending.set(roomId, depth + 1);
+
+    // Serialize per room. pi's prompt() does NOT run a second prompt while the
+    // session is streaming: it queues via followUp and returns *immediately*,
+    // so a caller that then renders its buffer renders nothing, while its text
+    // silently lands in the previous run's output. Waiting for our turn means
+    // every prompt owns a complete run.
+    const prev = this.chains.get(roomId) ?? Promise.resolve();
+    const mine = prev.then(
+      () => this.#runPrompt(ctx),
+      () => this.#runPrompt(ctx), // a failed predecessor must not block the queue
+    );
+    this.chains.set(roomId, mine.then(() => {}, () => {}));
+
+    try {
+      return await mine;
+    } finally {
+      this.pending.set(roomId, Math.max(0, (this.pending.get(roomId) ?? 1) - 1));
+    }
+  }
+
+  /** Run exactly one prompt to completion. Callers must hold the room's turn. */
+  async #runPrompt({ roomId, text, sender, client }) {
     LogService.info("agent", `→ ${sender} in ${roomId}: ${JSON.stringify(text)}`);
 
     const session = await this.#getOrCreateSession(roomId);
 
+    // Belt and braces: if anything still has the session streaming, prompting
+    // now would hit the queue-and-return path this serialization exists to
+    // avoid. Wait it out rather than emit a silent no-op.
+    await waitUntilIdle(session);
+
     // Accumulate locally — never post anything until the run is done.
-    const buffer = {
-      text: "",
-      toolLines: [],
-    };
+    //
+    // Blocks, not a single string: one run emits several assistant messages
+    // around each tool call, and each message's `partial` covers only itself.
+    // Assigning would keep just the last one and silently drop the prose in
+    // between. Recording blocks in event order also lets tool lines sit where
+    // they actually happened rather than being bunched at the top.
+    const buffer = { blocks: [] };
 
     const unsub = session.subscribe((event) => this.#onEvent(event, buffer));
 
@@ -179,8 +229,10 @@ export class AgentManager {
       await session.prompt(text, { streamingBehavior: "followUp" });
     } catch (err) {
       LogService.error("agent", `prompt failed in ${roomId}: ${err?.message ?? err}`);
-      const body = renderReply(buffer) + `\n\n_⚠️ ${err?.message ?? String(err)}_`;
-      await this.#post(client, roomId, body);
+      const note = `⚠️ ${err?.message ?? String(err)}`;
+      const body = renderReply(buffer) + `\n\n_${note}_`;
+      const html = renderReplyHtml(buffer) + `<p><em>${escapeHtml(note)}</em></p>`;
+      await this.#post(client, roomId, body, html);
       throw err;
     } finally {
       unsub();
@@ -193,7 +245,7 @@ export class AgentManager {
       LogService.warn("agent", `run in ${roomId} produced no text output`);
       return;
     }
-    await this.#post(client, roomId, body);
+    await this.#post(client, roomId, body, renderReplyHtml(buffer));
   }
 
   /** @param {any} event */
@@ -202,28 +254,41 @@ export class AgentManager {
       case "message_update": {
         const sub = event.assistantMessageEvent;
         if (sub.type === "text_delta") {
-          buffer.text = extractText(sub.partial);
+          // Deltas restate the whole message, so replace the open block rather
+          // than concatenating — but only the block belonging to this message.
+          openTextBlock(buffer).text = extractText(sub.partial);
         } else if (sub.type === "thinking_delta") {
           // Internal reasoning — not surfaced.
         }
         break;
       }
       case "tool_execution_start": {
-        buffer.toolLines.push(`⏺ ${event.toolName}(${summarizeArgs(event.args)})`);
+        buffer.blocks.push({
+          type: "tool",
+          text: `⏺ ${event.toolName}(${summarizeArgs(event.args)})`,
+          done: false,
+        });
         break;
       }
       case "tool_execution_end": {
-        const last = buffer.toolLines[buffer.toolLines.length - 1];
-        if (last?.startsWith("⏺")) {
-          buffer.toolLines[buffer.toolLines.length - 1] =
-            last + (event.isError ? "  ✗" : "  ✓");
+        // Match the most recent unfinished tool block; tools can nest or
+        // overlap, so the last one is not necessarily the right one.
+        for (let i = buffer.blocks.length - 1; i >= 0; i--) {
+          const b = buffer.blocks[i];
+          if (b.type === "tool" && !b.done) {
+            b.text += event.isError ? "  ✗" : "  ✓";
+            b.done = true;
+            break;
+          }
         }
         break;
       }
       case "message_end": {
-        // Final text from the finished assistant message.
+        // Seal this message's text block so the next message opens a new one.
         if (event.message?.role === "assistant") {
-          buffer.text = extractText(event.message);
+          const block = openTextBlock(buffer);
+          block.text = extractText(event.message);
+          block.done = true;
         }
         break;
       }
@@ -232,12 +297,16 @@ export class AgentManager {
     }
   }
 
-  async #post(client, roomId, body) {
+  async #post(client, roomId, body, html = null) {
     try {
-      await client.sendMessage(roomId, {
-        msgtype: "m.text",
-        body,
-      });
+      const content = { msgtype: "m.text", body };
+      // Fall back to treating the body itself as markdown for simple notices.
+      const formatted = html ?? renderMarkdown(body);
+      if (formatted && formatted !== body) {
+        content.format = "org.matrix.custom.html";
+        content.formatted_body = formatted;
+      }
+      await client.sendMessage(roomId, content);
     } catch (err) {
       LogService.error("agent", `sendMessage failed in ${roomId}: ${err?.message ?? err}`);
     }
@@ -257,8 +326,82 @@ export class AgentManager {
   }
 }
 
-function renderReply({ text, toolLines }) {
-  return (toolLines.length ? toolLines.join("\n") + "\n\n" : "") + text;
+/**
+ * Wait for a session to stop streaming, so the next prompt starts a real run
+ * instead of being queued as a follow-up. Bounded: if it never settles we go
+ * ahead anyway rather than wedging the room forever.
+ */
+async function waitUntilIdle(session, timeoutMs = 120_000) {
+  if (!session.isStreaming) return;
+  LogService.warn("agent", "session still streaming at turn start; waiting for it to settle");
+  const deadline = Date.now() + timeoutMs;
+  while (session.isStreaming && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  if (session.isStreaming) {
+    LogService.error("agent", `session still streaming after ${timeoutMs}ms; prompting anyway`);
+  }
+}
+
+/** The trailing text block for the message currently streaming, creating it if needed. */
+function openTextBlock(buffer) {
+  const last = buffer.blocks[buffer.blocks.length - 1];
+  if (last && last.type === "text" && !last.done) return last;
+  const block = { type: "text", text: "", done: false };
+  buffer.blocks.push(block);
+  return block;
+}
+
+/**
+ * Blocks in the order they happened. Consecutive tool lines stay tight
+ * together; anything else gets a blank line so prose and tool traces read as
+ * separate paragraphs.
+ */
+function renderReply({ blocks }) {
+  const parts = [];
+  let prevType = null;
+  for (const b of blocks) {
+    const text = (b.text ?? "").trim();
+    if (!text) continue;
+    if (parts.length) parts.push(prevType === "tool" && b.type === "tool" ? "\n" : "\n\n");
+    parts.push(text);
+    prevType = b.type;
+  }
+  return parts.join("");
+}
+
+/**
+ * The same blocks as HTML for formatted_body.
+ *
+ * Text blocks go through markdown. Tool lines deliberately do NOT: their args
+ * are raw JSON, and markdown would read `_` and `*` inside a command as
+ * emphasis and mangle it. They are escaped and wrapped in <code> instead, which
+ * also renders them monospace — closer to what they are.
+ */
+function renderReplyHtml({ blocks }) {
+  const out = [];
+  let run = []; // consecutive tool lines, grouped into one <p>
+
+  const flushTools = () => {
+    if (!run.length) return;
+    out.push(`<p>${run.map((t) => `<code>${escapeHtml(t)}</code>`).join("<br/>")}</p>`);
+    run = [];
+  };
+
+  for (const b of blocks) {
+    const text = (b.text ?? "").trim();
+    if (!text) continue;
+    if (b.type === "tool") {
+      run.push(text);
+      continue;
+    }
+    flushTools();
+    const html = renderMarkdown(text);
+    if (html) out.push(html);
+  }
+  flushTools();
+
+  return out.join("\n");
 }
 
 /** Matrix room IDs are safe-ish on disk, but colons and bangs make for ugly paths. */
