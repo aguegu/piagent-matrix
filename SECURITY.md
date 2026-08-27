@@ -51,6 +51,23 @@ explicit `tools` allowlist to `createAgentSession`.
 - Run `npm run cross-sign` after any fresh login, or Element shows
   "Encrypted by a device not verified by its owner" on everything the bot sends.
 
+## Install scripts
+
+npm may decline to run install scripts, which is a sensible default — but one of
+them is required here. `@matrix-org/matrix-sdk-crypto-nodejs` ships no binary;
+its `postinstall` downloads a native library over the network at install time,
+and without it the bot cannot start.
+
+Approve that one specifically rather than allowing scripts wholesale:
+
+```sh
+npm install-scripts approve @matrix-org/matrix-sdk-crypto-nodejs
+```
+
+The other scripts npm flags (`@google/genai`, `protobufjs`) are not needed and
+can stay unapproved. Setup instructions and the verification step are in the
+README.
+
 ## Known dependency advisories
 
 `npm audit` reports 8 advisories (2 critical, 6 moderate). **All 8 have a single

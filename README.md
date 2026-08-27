@@ -41,6 +41,47 @@ cp .env .env.local     # then fill in .env.local
 npm start
 ```
 
+### The crypto binding needs its install script
+
+`@matrix-org/matrix-sdk-crypto-nodejs` ships no binary. Its `postinstall`
+(`download-lib.js`) fetches a ~22 MB native library from GitHub Releases for
+your platform, and `index.js` loads it from next to itself. Without it,
+`require()` fails with `Cannot find module '…-linux-x64-gnu'` and the bot cannot
+start — no crypto binding, no E2EE.
+
+npm may decline to run it:
+
+```
+npm warn install-scripts  @matrix-org/matrix-sdk-crypto-nodejs@0.4.0 (postinstall: node download-lib.js)
+```
+
+Approve that one and re-install:
+
+```sh
+npm install-scripts approve @matrix-org/matrix-sdk-crypto-nodejs
+npm install
+```
+
+Then check it actually landed, before starting the bot:
+
+```sh
+ls node_modules/@matrix-org/matrix-sdk-crypto-nodejs/*.node
+node -e "require('@matrix-org/matrix-sdk-crypto-nodejs'); console.log('crypto binding OK')"
+```
+
+The other scripts npm flags are safe to leave unapproved: `@google/genai`'s
+preinstall is a literal no-op, and `protobufjs`'s postinstall is not needed by
+consumers.
+
+Two things that bite on servers:
+
+- The download happens **at install time** and reaches
+  `github.com/matrix-org/matrix-rust-sdk-crypto-nodejs/releases`. Restricted
+  egress breaks the install; the script honours `https_proxy` / `HTTPS_PROXY`.
+- It selects by `process.platform` / `process.arch`, with a musl check. On
+  arm64 or Alpine it fetches a different build, so confirm one exists for your
+  target.
+
 `.env` is a committed template: keys, comments, and non-secret defaults.
 `.env.local` holds the real values and is gitignored. `dotenv-flow` loads `.env`
 first and lets `.env.local` override every key; real environment variables win
