@@ -3,7 +3,7 @@ data/
 sessions/
 *.log
 
-# The parent .gitignore excludes .env repo-wide, but v2's .env is a committed
+# The parent .gitignore excludes .env repo-wide, but this .env is a committed
 # template holding no secrets — real values live in .env.local.
 !.env
 .env.local
@@ -11,3 +11,10 @@ sessions/
 v1-archive/
 outbox/
 workspace/
+
+# Editor swap/backup files. A swap of .env.local would contain the Matrix
+# password and recovery key, and none of these are covered by the .env rules.
+*.swp
+*.swo
+*~
+.*.sw?
