@@ -214,3 +214,44 @@ describe("room context given to the agent", () => {
     assert.doesNotMatch(first, /rename\(\)/, "but promises no send mechanism it does not have");
   });
 });
+
+describe("slash commands survive the room briefing", () => {
+  it("does not prefix context onto a leading slash", async () => {
+    // pi expands prompt templates and skill commands only when the text starts
+    // with "/", so a briefing prefix would silently turn /verify into an
+    // ordinary message.
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const roomId = "!room:example.org";
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      outboxDir: "/srv/bot/outbox",
+      createSession: async () => ({ session }),
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    await mgr.handleMessage({ roomId, text: "/verify", sender: "@a:example.org", client });
+
+    assert.equal(session.promptsRun[0], "/verify", "reaches pi with the slash intact");
+  });
+
+  it("still briefs on the next ordinary message", async () => {
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const roomId = "!room:example.org";
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      outboxDir: "/srv/bot/outbox",
+      createSession: async () => ({ session }),
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    await mgr.handleMessage({ roomId, text: "/verify", sender: "@a:example.org", client });
+    await mgr.handleMessage({ roomId, text: "hello", sender: "@a:example.org", client });
+
+    const [first, second] = session.promptsRun;
+    assert.equal(first, "/verify", "the command turn carries no preamble");
+    assert.match(second, /!room:example\.org/, "the context is not lost, just deferred");
+    assert.ok(second.endsWith("hello"));
+  });
+});

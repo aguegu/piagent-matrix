@@ -88,8 +88,8 @@ ones are:
 | Env var | Default | Used for |
 | --- | --- | --- |
 | `BOT_CWD` | `/tmp/piagent-workspace` (from `.env`) | agent working directory; the bot refuses to start if unset |
-| `PI_MODEL` | first available | `provider/id`, or bare `id` |
-| `PI_THINKING_LEVEL` | `low` | `off`…`max` |
+| `PI_MODEL` | first available | `provider/id`, or bare `id`. First-run default; `.model` records a choice that wins |
+| `PI_THINKING_LEVEL` | `low` | `off`…`max`. First-run default; `.thinking` records a choice that wins |
 | `PI_AGENT_DIR` | `${DATA_DIR}/pi` | pi's auth, settings, skills, extensions |
 | `SESSION_DIR` | `./sessions` | per-room conversation history |
 | `OUTBOX_DIR` | `./outbox` | spool the agent can write to |

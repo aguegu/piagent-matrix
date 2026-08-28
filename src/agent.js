@@ -13,8 +13,8 @@
 //     ends. Tool-call status lines are still surfaced inline so a long tool
 //     run is visible in the final answer.
 
-import { mkdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import {
@@ -37,6 +37,10 @@ export class AgentManager {
     this.createSession = opts.createSession ?? createAgentSession;
     // Absolute, or null to fall back to pi's own default (~/.pi/agent).
     this.agentDir = opts.agentDir ? resolve(opts.agentDir) : null;
+    // `.model` and `.thinking` record their choices here so they survive a
+    // restart; that is the point of those commands, and why PI_MODEL and
+    // PI_THINKING_LEVEL are only first-run defaults.
+    this.stateFile = opts.stateFile ? resolve(opts.stateFile) : null;
     /** @type {Map<string, Promise<import('@earendil-works/pi-coding-agent').AgentSession>>} */
     this.sessions = new Map();
     /** Per-room tail of the run chain, so prompts never overlap. @type {Map<string, Promise<void>>} */
@@ -75,36 +79,21 @@ export class AgentManager {
       throw new Error(describeMissingAuth(agentDir));
     }
 
-    const want = this.opts.model; // e.g. "minimax-cn/MiniMax-M3" or bare "MiniMax-M3"
-    // PI_PROVIDER is set by the pi CLI when invoked interactively; honour it
-    // as a tie-breaker when PI_MODEL is just a bare id.
-    const providerHint = process.env.PI_PROVIDER || null;
+    // Precedence: a choice recorded by `.model`, then PI_MODEL, then whatever
+    // is first available. The recorded one wins so a switch made in a room is
+    // not silently undone by a stale environment variable.
+    const recorded = this.#readState().model;
+    const want = recorded || this.opts.model;
     if (want) {
-      // Accept either "provider/id" or bare "id". The shell often has PI_MODEL
-      // set from a prior `pi` invocation with just the model id.
-      let provider = null;
-      let id = want;
-      if (want.includes("/")) {
-        const [p, ...rest] = want.split("/");
-        provider = p;
-        id = rest.join("/");
-      } else if (providerHint) {
-        provider = providerHint;
-      }
-      const hit = available.find((m) => {
-        if (m.id !== id) return false;
-        if (provider && m.provider !== provider) return false;
-        return true;
-      });
-      if (!hit) {
+      const hit = matchModel(available, want);
+      if (hit) {
+        this.model = hit;
+      } else {
         LogService.warn(
           "agent",
-          `Requested model ${want}${providerHint ? ` (provider=${providerHint})` : ""} not available. Falling back. Available: ${available
-            .map((m) => `${m.provider}/${m.id}`)
-            .join(", ")}`,
+          `${recorded ? "Recorded" : "Requested"} model ${want} not available. Falling back. ` +
+            `Available: ${available.map((m) => `${m.provider}/${m.id}`).join(", ")}`,
         );
-      } else {
-        this.model = hit;
       }
     }
     if (!this.model) {
@@ -146,9 +135,45 @@ export class AgentManager {
     return lines.join("\n");
   }
 
+  /** Recorded choice first, then PI_THINKING_LEVEL, then "low". */
   #thinkingLevel() {
-    const want = (this.opts.thinkingLevel || "low").toLowerCase();
+    const want = String(this.#readState().thinkingLevel || this.opts.thinkingLevel || "low").toLowerCase();
     return THINKING_LEVELS.includes(want) ? want : "low";
+  }
+
+  /** The thinking level in use for a room, and the levels on offer. */
+  async describeThinking(roomId) {
+    const session = this.sessions.has(roomId) ? await this.sessions.get(roomId) : null;
+    return {
+      current: session?.thinkingLevel ?? this.#thinkingLevel(),
+      live: Boolean(session),
+      levels: [...THINKING_LEVELS],
+    };
+  }
+
+  /**
+   * Set the thinking level, as pi's `/thinking <level>` does, and remember it.
+   *
+   * Applies to every live session and is recorded, so it replaces setting
+   * PI_THINKING_LEVEL rather than reverting on the next restart.
+   */
+  async setThinkingLevel(level) {
+    const want = String(level ?? "").trim().toLowerCase();
+    if (!THINKING_LEVELS.includes(want)) {
+      return { ok: false, levels: [...THINKING_LEVELS] };
+    }
+    let applied = 0;
+    for (const [roomId, pending] of this.sessions) {
+      try {
+        (await pending).setThinkingLevel(want);
+        applied += 1;
+      } catch (err) {
+        LogService.warn("agent", `setThinkingLevel failed for ${roomId}: ${err?.message ?? err}`);
+      }
+    }
+    this.#writeState({ thinkingLevel: want });
+    LogService.info("agent", `Thinking level set to ${want} (${applied} live session(s)).`);
+    return { ok: true, level: want, applied };
   }
 
   /**
@@ -299,8 +324,14 @@ export class AgentManager {
     // know which room it is in — "post this here" or "set up a cron that
     // reports here" are unanswerable. Tell it once per session, along with the
     // one mechanism it can actually use to send something later.
-    const prompt = this.briefed.has(roomId) ? text : this.#brief(roomId) + text;
-    this.briefed.add(roomId);
+    //
+    // Never in front of a leading slash: pi expands prompt templates and skill
+    // commands only when the text starts with "/", so a prefix here would turn
+    // `/verify` into an ordinary message. Such a turn stays unbriefed, and the
+    // context goes out with the next ordinary one.
+    const isSlashCommand = text.startsWith("/");
+    const prompt = this.briefed.has(roomId) || isSlashCommand ? text : this.#brief(roomId) + text;
+    if (!isSlashCommand) this.briefed.add(roomId);
 
     try {
       await session.prompt(prompt, { streamingBehavior: "followUp" });
@@ -389,6 +420,116 @@ export class AgentManager {
     }
   }
 
+  /**
+   * The model in use for a room, and everything available.
+   *
+   * A room never messaged has no session yet, so it reports the manager's
+   * default — what the next session would start with.
+   */
+  async describeModel(roomId) {
+    await this.#ensureModel();
+    const available = [...(await this.runtime.getAvailable())];
+    const session = this.sessions.has(roomId) ? await this.sessions.get(roomId) : null;
+    const current = session?.model ?? this.model;
+    return {
+      current: current ? `${current.provider}/${current.id}` : "(none)",
+      live: Boolean(session),
+      available: available.map((m) => `${m.provider}/${m.id}`),
+    };
+  }
+
+  /**
+   * Switch the model, as pi's `/model <provider/model>` does, and remember it.
+   *
+   * Applies to every live session and to any created later, and is recorded so
+   * it survives a restart — this is meant to replace setting PI_MODEL, not to
+   * be a per-room override that quietly reverts.
+   *
+   * @returns {Promise<{ ok: boolean, model?: string, applied?: number, available?: string[] }>}
+   */
+  async setModel(want) {
+    await this.#ensureModel();
+    const available = [...(await this.runtime.getAvailable())];
+    const hit = matchModel(available, want);
+    if (!hit) {
+      return { ok: false, available: available.map((m) => `${m.provider}/${m.id}`) };
+    }
+
+    this.model = hit;
+    let applied = 0;
+    for (const [roomId, pending] of this.sessions) {
+      try {
+        const session = await pending;
+        await session.setModel(hit);
+        applied += 1;
+      } catch (err) {
+        LogService.warn("agent", `setModel failed for ${roomId}: ${err?.message ?? err}`);
+      }
+    }
+    this.#writeState({ model: `${hit.provider}/${hit.id}` });
+    LogService.info("agent", `Model set to ${hit.provider}/${hit.id} (${applied} live session(s)).`);
+    return { ok: true, model: `${hit.provider}/${hit.id}`, applied };
+  }
+
+  /** Recorded choices, or an empty object when nothing has been set yet. */
+  #readState() {
+    if (!this.stateFile) return {};
+    try {
+      const saved = JSON.parse(readFileSync(this.stateFile, "utf8"));
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Merge a change into the recorded state. */
+  #writeState(patch) {
+    if (!this.stateFile) return;
+    try {
+      const next = { ...this.#readState(), ...patch };
+      mkdirSync(dirname(this.stateFile), { recursive: true });
+      // Write-then-rename so a crash cannot leave a half-written record.
+      const tmp = `${this.stateFile}.tmp`;
+      writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+      renameSync(tmp, this.stateFile);
+    } catch (err) {
+      // Not fatal: the change still applies to this process, it just will not
+      // survive a restart.
+      LogService.warn("agent", `Could not record agent state: ${err?.message ?? err}`);
+    }
+  }
+
+  /**
+   * pi's `/reload`, applied to every live session.
+   *
+   * `AgentSession.reload()` re-reads keybindings, extensions, skills, prompts,
+   * themes and context files in place, keeping the session and its history.
+   * Those resources are read when a session is created, so without this a
+   * running bot keeps whatever was installed at its first message.
+   *
+   * Every room is reloaded, not just the one asking: extensions and prompts
+   * live in `PI_AGENT_DIR` and are shared, so reloading one room would leave
+   * the rest stale.
+   *
+   * @returns {Promise<{ reloaded: number, failed: Array<{ roomId: string, error: string }> }>}
+   */
+  async reload() {
+    const failed = [];
+    let reloaded = 0;
+    for (const [roomId, pending] of this.sessions) {
+      try {
+        const session = await pending;
+        await session.reload();
+        reloaded += 1;
+      } catch (err) {
+        failed.push({ roomId, error: err?.message ?? String(err) });
+        LogService.error("agent", `reload failed for ${roomId}: ${err?.message ?? err}`);
+      }
+    }
+    LogService.info("agent", `Reloaded ${reloaded} session(s)${failed.length ? `, ${failed.length} failed` : ""}.`);
+    return { reloaded, failed };
+  }
+
   /** Stop tracking a room (e.g., on shutdown). */
   async dispose() {
     for (const p of this.sessions.values()) {
@@ -418,6 +559,37 @@ async function waitUntilIdle(session, timeoutMs = 120_000) {
   if (session.isStreaming) {
     LogService.error("agent", `session still streaming after ${timeoutMs}ms; prompting anyway`);
   }
+}
+
+/**
+ * Resolve "provider/id" or a bare "id" against the available models.
+ *
+ * A bare id is what the shell usually holds: a prior `pi` run exports PI_MODEL
+ * and PI_PROVIDER separately, so PI_PROVIDER breaks the tie when no provider is
+ * given. Returns null when nothing matches, leaving the caller to decide
+ * whether that is a warning or an error.
+ */
+function matchModel(available, want) {
+  if (!want) return null;
+  let provider = null;
+  let id = String(want).trim();
+  if (id.includes("/")) {
+    const [p, ...rest] = id.split("/");
+    provider = p;
+    id = rest.join("/");
+  } else if (process.env.PI_PROVIDER) {
+    provider = process.env.PI_PROVIDER;
+  }
+  const exact = available.find((m) => m.id === id && (!provider || m.provider === provider));
+  if (exact) return exact;
+  // Model ids are typed by hand here, so fall back to a case-insensitive match.
+  return (
+    available.find(
+      (m) =>
+        m.id.toLowerCase() === id.toLowerCase() &&
+        (!provider || m.provider.toLowerCase() === provider.toLowerCase()),
+    ) ?? null
+  );
 }
 
 /** The trailing text block for the message currently streaming, creating it if needed. */

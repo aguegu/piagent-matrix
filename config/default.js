@@ -45,10 +45,16 @@ export default {
     // Unaddressed *.txt drops go to the main room; see matrix.mainRoom.
   },
   agent: {
-    // PI_MODEL = "<provider>/<model-id>". If unset, picks the first available.
+    // Startup default only, and optional. `.model` in a room records a choice
+    // in stateFile, which wins over this; PI_MODEL exists for a fresh install
+    // or a container that has never been told. Empty means first available.
     model: process.env.PI_MODEL || "",
-    // PI_THINKING_LEVEL = off | minimal | low | medium | high | xhigh | max. Default low.
+    // Startup default only, like model. `.thinking` records a choice that wins.
     thinkingLevel: process.env.PI_THINKING_LEVEL || "low",
+    // Where `.model` and `.thinking` record their choices, beside the bot's
+    // other state rather than in pi's directory — these are the bot's settings,
+    // not pi's.
+    stateFile: `${dataDir}/agent.json`,
     // Working directory the agent operates in. Each Matrix room shares this cwd;
     // per-room cwd is intentionally out of scope for the first cut.
     //
