@@ -35,28 +35,43 @@ import { dirname, join } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 
 /**
- * Whether a room is shaped like a control channel.
+ * Whether a room is shaped like a control channel, and who its admin is.
+ *
+ * A fitting room has exactly one member besides the bot, and that member is
+ * the admin — the person the control channel belongs to. It is returned so it
+ * can be recorded alongside the room: a room id alone says where the bot takes
+ * orders, not who from.
  *
  * @param {string[]|null} members  user ids in the room, null if unknown
  * @param {string[]} allowedUsers  MATRIX_ALLOWED_USERS; empty means everyone
- * @returns {{ ok: boolean, why: string }} `why` describes the disqualification
+ * @param {string} botUserId  the bot's own id, to tell it from its admin
+ * @returns {{ ok: boolean, why: string, admin: string }}
  */
-export function roomFits(members, allowedUsers = []) {
-  if (!Array.isArray(members)) return { ok: false, why: "its membership could not be read" };
+export function roomFits(members, allowedUsers = [], botUserId = "") {
+  const no = (why) => ({ ok: false, why, admin: "" });
+  if (!Array.isArray(members)) return no("its membership could not be read");
   if (members.length > 2) {
-    return { ok: false, why: `it has ${members.length} members, so it is not a private admin channel` };
+    return no(`it has ${members.length} members, so it is not a private admin channel`);
   }
-  // An empty allowlist means everyone may command the bot, so the question
-  // does not arise — and there is nobody to distinguish from the bot itself.
-  if (allowedUsers.length && !members.some((m) => allowedUsers.includes(m))) {
-    return { ok: false, why: "it holds nobody from MATRIX_ALLOWED_USERS" };
+
+  const others = members.filter((m) => m !== botUserId);
+  // An empty allowlist means everyone may command the bot, so being allowed is
+  // not a question — but there still has to be somebody there to be the admin.
+  const admins = allowedUsers.length ? others.filter((m) => allowedUsers.includes(m)) : others;
+  if (!admins.length) {
+    return no(
+      allowedUsers.length
+        ? "it holds nobody from MATRIX_ALLOWED_USERS"
+        : "the bot would be alone in it, with no admin",
+    );
   }
-  return { ok: true, why: "" };
+  return { ok: true, why: "", admin: admins[0] };
 }
 
 export class MainRoom {
   #path;
   #roomId = "";
+  #admin = "";
 
   /** @param {string} dataDir  where the record lives, beside the bot's other state */
   constructor(dataDir) {
@@ -64,6 +79,8 @@ export class MainRoom {
     try {
       const saved = JSON.parse(readFileSync(this.#path, "utf8"));
       if (typeof saved?.roomId === "string") this.#roomId = saved.roomId;
+      // Records written before the admin was stored simply have none.
+      if (typeof saved?.admin === "string") this.#admin = saved.admin;
     } catch {
       /* not recorded yet */
     }
@@ -74,6 +91,11 @@ export class MainRoom {
     return this.#roomId;
   }
 
+  /** The admin the room was adopted for, or "" if unrecorded. */
+  get admin() {
+    return this.#admin;
+  }
+
   /** True once a record exists on disk. */
   get isRecorded() {
     return existsSync(this.#path);
@@ -82,27 +104,32 @@ export class MainRoom {
   /** One line for the startup log. */
   describe() {
     if (!this.#roomId) return "No main room yet — the first room that fits becomes it.";
-    return `Main room is ${this.#roomId}.`;
+    return `Main room is ${this.#roomId}${this.#admin ? `, admin ${this.#admin}` : ""}.`;
   }
 
   /**
    * Record a room as the main room, unless one is already established.
    *
    * Whether the room *fits* is the caller's business — see roomFits — because
-   * that needs a membership lookup this class does not make.
+   * that needs a membership lookup this class does not make. roomFits returns
+   * the admin to pass in here.
    *
    * @returns {boolean} true if this call set it
    */
-  adopt(roomId, why) {
+  adopt(roomId, why, admin = "") {
     if (this.#roomId) return false;
     this.#roomId = roomId;
+    this.#admin = admin;
     try {
       mkdirSync(dirname(this.#path), { recursive: true });
       // Write-then-rename so a crash cannot leave a half-written record.
       const tmp = `${this.#path}.tmp`;
-      writeFileSync(tmp, `${JSON.stringify({ roomId, recordedBecause: why }, null, 2)}\n`);
+      writeFileSync(tmp, `${JSON.stringify({ roomId, admin, recordedBecause: why }, null, 2)}\n`);
       renameSync(tmp, this.#path);
-      LogService.info("bot", `Main room set to ${roomId} (${why}). Recorded in ${this.#path}.`);
+      LogService.info(
+        "bot",
+        `Main room set to ${roomId}${admin ? ` for ${admin}` : ""} (${why}). Recorded in ${this.#path}.`,
+      );
     } catch (err) {
       // Losing the record is not fatal: it will be re-adopted next time.
       LogService.warn("bot", `Could not record the main room: ${err?.message ?? err}`);
@@ -124,6 +151,7 @@ export class MainRoom {
     if (!this.#roomId) return false;
     const was = this.#roomId;
     this.#roomId = "";
+    this.#admin = "";
     try {
       rmSync(this.#path, { force: true });
     } catch (err) {
@@ -172,6 +200,11 @@ export class MainRoom {
               "command is in the room where commands run.",
           );
         }
+      }
+      if (this.#admin && !members.includes(this.#admin)) {
+        out.problems.push(
+          `${this.#admin} adopted main room ${roomId} and is no longer in it.`,
+        );
       }
       if (members.length > 2) {
         out.problems.push(

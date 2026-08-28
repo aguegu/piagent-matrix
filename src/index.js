@@ -317,7 +317,8 @@ async function runCommand(command, { agent, client, roomId, sender }) {
     if (!sub) {
       const lines = ["**Rooms**", ""];
       for (const id of joined) {
-        lines.push(`- ${await describeRoom(client, id)}${id === main ? " — **main room**" : ""}`);
+        const tag = id === main ? `— **main room**${mainRoom.admin ? `, admin \`${mainRoom.admin}\`` : ""}` : "";
+        lines.push(`- ${await describeRoom(client, id)} ${tag}`.trimEnd());
       }
       lines.push("", "Leave one with `.rooms leave <roomId>`.");
       await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
@@ -514,11 +515,13 @@ async function verifyMainRoom(client, joined) {
  */
 async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   if (!mainRoom || mainRoom.roomId) return;
+  // Needed to tell the bot from its admin among a room's two members.
+  const me = await client.getUserId().catch(() => "");
 
   if (preferred) {
-    const fit = roomFits(await roomMembers(client, preferred), matrix.allowedUsers);
+    const fit = roomFits(await roomMembers(client, preferred), matrix.allowedUsers, me);
     if (fit.ok) {
-      if (mainRoom.adopt(preferred, why || "joined a room that fits")) {
+      if (mainRoom.adopt(preferred, why || "joined a room that fits", fit.admin)) {
         await announceMainRoom(client, preferred);
       }
       return;
@@ -530,12 +533,13 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   const fits = [];
   for (const roomId of joined) {
     if (roomId === preferred) continue; // already tried, and it did not fit
-    if (roomFits(await roomMembers(client, roomId), matrix.allowedUsers).ok) fits.push(roomId);
+    const fit = roomFits(await roomMembers(client, roomId), matrix.allowedUsers, me);
+    if (fit.ok) fits.push({ roomId, admin: fit.admin });
   }
 
   if (fits.length === 1) {
-    if (mainRoom.adopt(fits[0], why || "the only room that fits")) {
-      await announceMainRoom(client, fits[0]);
+    if (mainRoom.adopt(fits[0].roomId, why || "the only room that fits", fits[0].admin)) {
+      await announceMainRoom(client, fits[0].roomId);
     }
     return;
   }
@@ -549,7 +553,7 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   }
   LogService.warn(
     "bot",
-    `No main room, and ${fits.length} rooms would fit (${fits.join(", ")}), so there is no safe ` +
+    `No main room, and ${fits.length} rooms would fit (${fits.map((f) => f.roomId).join(", ")}), so there is no safe ` +
       "guess. Invite the bot to the room you want and it takes that one.",
   );
 }

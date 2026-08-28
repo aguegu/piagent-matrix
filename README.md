@@ -322,9 +322,25 @@ with no restart.
 
 **A room is adopted when there is no main room and the room fits**: the bot is
 in it, it holds no more than two members, and — when `MATRIX_ALLOWED_USERS` is
-set — one of them may run commands. That last part is what makes adoption safe.
-A stranger cannot hand the bot a control channel by inviting it somewhere, and a
-busy working room cannot become one by accident.
+set — the other one may run commands. That last part is what makes adoption
+safe. A stranger cannot hand the bot a control channel by inviting it somewhere,
+and a busy working room cannot become one by accident.
+
+That other member is the room's **admin**, and is recorded alongside it:
+
+```json
+{
+  "roomId": "!abc:example.org",
+  "admin": "@agu:example.org",
+  "recordedBecause": "first room that fits"
+}
+```
+
+A room id on its own says where the bot takes orders, not who from. The startup
+log and `.rooms` both name the admin, and the room is flagged at startup if they
+are no longer in it — a control channel outliving the person it was adopted for
+is worth noticing, even though it still works. Records written before this
+simply carry no `admin`, and are read as before.
 
 | Situation | What happens |
 | --- | --- |
@@ -358,8 +374,9 @@ logged, not thrown; the adoption still stands.
 
 **It is checked at every start.** A recorded room used to be trusted on sight,
 so one the bot had been kicked from looked healthy right up until every command
-was refused and outbox drops piled up as `.failed`. Three things are checked: the bot is in it (dropping the record if
-not), an allowlisted user is in it, and it has no more than two members. The
+was refused and outbox drops piled up as `.failed`. Four things are checked: the
+bot is in it (dropping the record if not), an allowlisted user is in it, the
+recorded admin is still in it, and it has no more than two members. The
 warning goes to the log always, and into the main room only when there is
 someone there to act on it — never to a room the bot is not in, and never to one
 holding no allowed user, since a room of strangers is the last place to announce

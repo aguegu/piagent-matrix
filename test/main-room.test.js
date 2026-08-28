@@ -10,32 +10,41 @@ const ADMIN = "@agu:example.org";
 const BOT = "@bot:example.org";
 
 describe("what makes a room fit to be the main room", () => {
-  it("accepts the bot alone with an allowed user", () => {
-    assert.equal(roomFits([BOT, ADMIN], [ADMIN]).ok, true);
+  it("accepts the bot alone with an allowed user, and names them", () => {
+    // The admin is returned so it can be recorded with the room: an id alone
+    // says where the bot takes orders, not who from.
+    assert.deepEqual(roomFits([BOT, ADMIN], [ADMIN], BOT), { ok: true, why: "", admin: ADMIN });
   });
 
   it("rejects a room holding nobody who may command the bot", () => {
     // This is what makes adoption safe: a stranger cannot hand the bot a
     // control channel by inviting it somewhere.
-    const fit = roomFits([BOT, "@stranger:example.org"], [ADMIN]);
+    const fit = roomFits([BOT, "@stranger:example.org"], [ADMIN], BOT);
     assert.equal(fit.ok, false);
+    assert.equal(fit.admin, "");
     assert.match(fit.why, /MATRIX_ALLOWED_USERS/);
   });
 
   it("rejects a room that is not private", () => {
-    const fit = roomFits([BOT, ADMIN, "@third:example.org"], [ADMIN]);
+    const fit = roomFits([BOT, ADMIN, "@third:example.org"], [ADMIN], BOT);
     assert.equal(fit.ok, false);
     assert.match(fit.why, /3 members/);
   });
 
-  it("does not ask who the admin is when the allowlist is empty", () => {
-    // Empty means everyone may command it, so the question does not arise.
-    assert.equal(roomFits([BOT, "@anyone:example.org"], []).ok, true);
+  it("takes the other member as admin when the allowlist is empty", () => {
+    // Empty means everyone may command it, so being allowed is not a question.
+    assert.equal(roomFits([BOT, "@anyone:example.org"], [], BOT).admin, "@anyone:example.org");
+  });
+
+  it("rejects a room the bot would be alone in", () => {
+    // Nobody to be the admin, whatever the allowlist says.
+    assert.equal(roomFits([BOT], [], BOT).ok, false);
+    assert.equal(roomFits([BOT], [ADMIN], BOT).ok, false);
   });
 
   it("rejects a room whose membership could not be read", () => {
     // Adopting on a failed lookup would pick a room nobody checked.
-    assert.equal(roomFits(null, [ADMIN]).ok, false);
+    assert.equal(roomFits(null, [ADMIN], BOT).ok, false);
   });
 });
 
@@ -44,16 +53,30 @@ describe("MainRoom", () => {
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "mainroom-")); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  it("adopts a room and records it", () => {
+  it("adopts a room and records it, with the admin it was adopted for", () => {
     const mr = new MainRoom(dir);
     assert.equal(mr.roomId, "", "nothing until a room is adopted");
 
-    assert.equal(mr.adopt(ROOM, "first room that fits"), true);
+    assert.equal(mr.adopt(ROOM, "first room that fits", ADMIN), true);
     assert.equal(mr.roomId, ROOM);
+    assert.equal(mr.admin, ADMIN);
 
     const saved = JSON.parse(readFileSync(join(dir, "main-room.json"), "utf8"));
     assert.equal(saved.roomId, ROOM);
+    assert.equal(saved.admin, ADMIN);
     assert.match(saved.recordedBecause, /first room that fits/);
+  });
+
+  it("reads the admin back after a restart", () => {
+    new MainRoom(dir).adopt(ROOM, "first room that fits", ADMIN);
+    assert.equal(new MainRoom(dir).admin, ADMIN);
+  });
+
+  it("copes with a record written before the admin was stored", () => {
+    writeFileSync(join(dir, "main-room.json"), JSON.stringify({ roomId: ROOM }));
+    const mr = new MainRoom(dir);
+    assert.equal(mr.roomId, ROOM, "the room still works");
+    assert.equal(mr.admin, "", "there simply is no admin recorded");
   });
 
   it("ignores later rooms once one is established", () => {
@@ -101,7 +124,7 @@ describe("MainRoom", () => {
   describe("verifying an established main room", () => {
     const settled = () => {
       const mr = new MainRoom(dir);
-      mr.adopt(ROOM, "first room that fits");
+      mr.adopt(ROOM, "first room that fits", ADMIN);
       return mr;
     };
 
@@ -126,8 +149,17 @@ describe("MainRoom", () => {
       const r = settled().verify([ROOM], [BOT, "@stranger:example.org"], [ADMIN]);
       assert.equal(r.present, true);
       assert.deepEqual(r.admins, []);
-      assert.equal(r.problems.length, 1);
+      assert.equal(r.problems.length, 2);
       assert.match(r.problems[0], /none of MATRIX_ALLOWED_USERS/);
+      assert.match(r.problems[1], /no longer in it/, "and names who is missing");
+    });
+
+    it("warns when the recorded admin has left, even if another allowed user is there", () => {
+      const other = "@colleague:example.org";
+      const r = settled().verify([ROOM], [BOT, other], [ADMIN, other]);
+      assert.deepEqual(r.admins, [other], "the room still has someone who may command it");
+      assert.equal(r.problems.length, 1);
+      assert.match(r.problems[0], new RegExp(`${ADMIN} adopted`));
     });
 
     it("warns about a main room that is no longer private, but keeps it", () => {
@@ -136,9 +168,9 @@ describe("MainRoom", () => {
       assert.match(r.problems[0], /3 members/);
     });
 
-    it("reports both problems at once", () => {
+    it("reports every problem at once", () => {
       const r = settled().verify([ROOM], [BOT, "@a:example.org", "@b:example.org"], [ADMIN]);
-      assert.equal(r.problems.length, 2);
+      assert.equal(r.problems.length, 3, "no allowed user, admin gone, and not private");
     });
 
     it("checks what it can when the member list is unavailable", () => {

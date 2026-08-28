@@ -9,6 +9,7 @@ checked rather than trusted.
 
 * `PI_MODEL` and `PI_THINKING_LEVEL` are gone: removed from `.env` and no longer read from the environment at all, along with the `PI_PROVIDER` tie-break for a bare model id. Both are runtime settings now — say `.model <provider/id>` and `.thinking <level>` once in the main room and the choice is recorded in `DATA_DIR/agent.json`. A bot that has never been told starts on the first available model at thinking level `low`. Reading them was worse than redundant: an interactive `pi` run exports `PI_MODEL` and `PI_PROVIDER` into the shell, so an operator who had run pi in that terminal handed the bot a model without knowing
 * `MATRIX_MAIN_ROOM` is gone. It was the escape hatch for a wrong record back when the only correction was editing `data/main-room.json` on the host; kicking the bot out of the main room now drops the record and the next fitting room takes over, so a second source of truth would only be something to argue with
+* `data/main-room.json` records the **admin** the room was adopted for, beside the room id — the one member who is not the bot. An id alone says where the bot takes orders, not who from. The startup log and `.rooms` name them, and verification flags a main room whose recorded admin has left. Records written before this carry no `admin` and are read as before
 * A room is adopted as the main room when there is none recorded and the room **fits**: the bot is in it, it holds no more than two members, and — when `MATRIX_ALLOWED_USERS` is set — one of them may run commands. That replaces "the first room joined", which said nothing about whether the room was suitable and let whoever invited the bot decide. A stranger can no longer hand it a control channel, and a busy working room cannot become one by accident
 
 ### New Features
@@ -31,7 +32,7 @@ checked rather than trusted.
 
 ### Tests
 
-* 69 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
+* 73 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
 
 ## 0.2.0 (2026-08-28)
 
