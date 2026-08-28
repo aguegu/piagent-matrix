@@ -2,7 +2,7 @@
 // for a pi AgentSession, one session per room, and posts a single clean reply
 // to the room when the run finishes.
 //
-// Design notes (from docs/agent-handoff.md):
+// Design notes (from docs/pi-integration.md):
 //   * `model.provider`, never `providerId` (v1 silently fell through).
 //   * Cache the createAgentSession PROMISE per room — two messages arriving
 //     back-to-back must not both spawn a session and clobber each other.

@@ -428,7 +428,7 @@ src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 scripts/cross-sign.js  provisioning, matrix-js-sdk only
-docs/agent-handoff.md   pi API notes and past failure modes
+docs/pi-integration.md  pi API notes and design decisions
 test/                   node:test suites
 data/                   the bot's identity          (gitignored)
 outbox/                 outgoing spool              (gitignored)
