@@ -362,25 +362,38 @@ async function runCommand(command, { agent, client, roomId, sender }) {
         await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
         return;
       }
-      await client.sendMessage(roomId, htmlMessage(await leaveRooms(client, agent, others)));
+      const { report } = await leaveRooms(client, agent, others);
+      await client.sendMessage(roomId, htmlMessage(report));
       return;
     }
 
-    if (target === main) {
-      await client.sendMessage(roomId, htmlMessage(
-        "That is the main room. Kick the bot from it instead: the record is dropped and the next " +
-          "room that fits takes over. Leaving on command would give up the control channel with " +
-          "nothing guaranteed to replace it.",
-      ));
-      return;
-    }
     if (!joined.includes(target)) {
       await client.sendMessage(roomId, htmlMessage(
         `Not in \`${target}\`. Say \`.rooms\` for the ids the bot is actually in.`,
       ));
       return;
     }
-    await client.sendMessage(roomId, htmlMessage(await leaveRooms(client, agent, [target])));
+
+    // Leaving the room the command came from — the main room, since that is
+    // where commands run. Allowed: whoever can type this can kick the bot out
+    // anyway, and more easily. But the goodbye has to go out first, because
+    // afterwards there is no room to send it to.
+    if (target === roomId) {
+      await client.sendMessage(roomId, htmlMessage(
+        "Leaving this room. The main room record goes with it, so the next room that fits becomes " +
+          "the control channel and the bot says so there. If none fits, it has no main room until " +
+          "one is invited.",
+      ));
+      const { failed } = await leaveRooms(client, agent, [target]);
+      // Still here if it did not work, so the failure can still be reported.
+      if (failed.length) {
+        await client.sendMessage(roomId, htmlMessage(`Could not leave: \`${failed[0]}\``));
+      }
+      return;
+    }
+
+    const { report } = await leaveRooms(client, agent, [target]);
+    await client.sendMessage(roomId, htmlMessage(report));
     return;
   }
 
@@ -449,7 +462,7 @@ async function announceMainRoom(client, roomId) {
  * Failures are collected rather than thrown, so one room the bot cannot leave
  * does not strand it in the rest.
  *
- * @returns {Promise<string>} what happened, as markdown
+ * @returns {Promise<{ left: string[], failed: string[], report: string }>}
  */
 async function leaveRooms(client, agent, roomIds) {
   const left = [];
@@ -471,7 +484,7 @@ async function leaveRooms(client, agent, roomIds) {
   if (failed.length) {
     lines.push("", `Could not leave ${failed.length}:`, ...failed.map((f) => `- \`${f}\``));
   }
-  return lines.join("\n");
+  return { left, failed, report: lines.join("\n") };
 }
 
 /**
