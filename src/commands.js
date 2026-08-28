@@ -26,7 +26,6 @@
 export const COMMANDS = {
   info: { what: "Show the model and thinking level in use", everywhere: true },
   verify: { what: "Run the `verify` prompt template from PI_AGENT_DIR/prompts" },
-  whoami: { what: "Report who the bot is, from its own records" },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
   rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>` leaves one" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },

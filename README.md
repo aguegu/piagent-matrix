@@ -414,23 +414,10 @@ On startup the bot logs what loaded, and says so when one fails:
 
 ### Prompt templates
 
-Two kinds, and the difference is who they belong to.
-
-**The bot's own** live in `prompts/` at the repo root, are reviewed with the code
-they describe, and are copied into `PI_AGENT_DIR/prompts` on every start.
-`whoami.md` is the one that ships. They are installed rather than symlinked
-because a template that names a path needs an absolute one, and that path
-differs per host: `{{DATA_DIR}}`, `{{BOT_CWD}}` and `{{OUTBOX_DIR}}` are
-substituted as the file is written. Editing the installed copy is pointless —
-the next start overwrites it. Edit the one in `prompts/`.
-
-**A deployment's own** go straight into `data/pi/prompts/`, and installing never
-touches them; only files the repo ships are written. That is the right home for
-a working style or a checklist belonging to one host.
-
-Either way, a template is `<name>.md` and runs as `/<name>` — reachable as a bot
-command once added to `COMMANDS` in `src/commands.js`, and otherwise by typing
-`/<name>` in a room.
+Drop `<name>.md` in `data/pi/prompts/` and it runs as `/<name>` in any room —
+and as a bot command once its name is added to `COMMANDS` in `src/commands.js`,
+which is how `.verify` works. These belong to the deployment, and the bot never
+touches them.
 
 ### Skills
 
@@ -452,6 +439,30 @@ Note the project-scoped one follows `BOT_CWD`, so with the default under `/tmp`
 it will not survive a reboot — point `BOT_CWD` at a durable path if you intend
 to keep context there.
 
+**The bot ships its own `AGENTS.md`** and installs it there on every start, from
+`agent/` at the repo root. It tells the agent what it is: reached through a chat
+client rather than a terminal, one session per room, one run at a time, answers
+posted whole and never edited afterwards, which commands the bot handles before
+the agent sees them, and that it has no Matrix client of its own. Without it an
+agent answers "who are you" as whatever a coding agent assumes by default. It
+also points at `data/main-room.json`, so the answer names the real main room and
+admin instead of being invented.
+
+This is a context file rather than a command on purpose. "Who are you" is a
+thing people ask in ordinary conversation, and a `.whoami` would only have
+answered when someone knew to type it.
+
+It is installed rather than symlinked so paths can be filled in — the agent runs
+in `BOT_CWD`, which is neither the repo nor `DATA_DIR`, so anything naming a path
+needs an absolute one and that differs per host. `{{DATA_DIR}}`, `{{BOT_CWD}}`
+and `{{OUTBOX_DIR}}` are substituted as the file is written. Edit `agent/`, not
+the installed copy: the next start overwrites it.
+
+**An `AGENTS.md` the bot did not write is never touched.** The installed copy
+carries a marker line, and a file without it is left exactly as it is, with a
+warning — that file is also the natural home for your own standing
+instructions.
+
 This is distinct from conversation history, which `SESSION_DIR` persists per
 room. Context files are instructions; sessions are what was said.
 
@@ -464,7 +475,6 @@ belong to the main room** — see below.
 | --- | --- | --- |
 | `.info` | any room | Shows the model and thinking level in use |
 | `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
-| `.whoami` | main room | Reports what the bot is, its main room, the admin it was adopted for, and its workspace |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -500,33 +510,10 @@ whether the room has a live session — sessions are in-memory, so a room chatte
 in for days would report none after a restart, and the values are the same
 either way.
 
-`.verify` and `.whoami` are not special-cased: the bot hands `/verify` or
-`/whoami` to pi, which expands the template and runs the agent, so the reply
-arrives like any other. Any prompt template works the same way once its name is
+`.verify` is not special-cased: the bot hands `/verify` to pi, which expands the
+template and runs the agent, so the reply arrives like any other. Any prompt
+template you drop in `PI_AGENT_DIR/prompts` works the same way once its name is
 added to `COMMANDS` in `src/commands.js`.
-
-The difference is where the template lives. `.whoami` describes *the bot* — its
-main room, and who it was adopted for — so it has to be true of every deployment
-and is shipped in `prompts/` (see below). `.verify` is one deployment's working
-style, and lives only in that host's `PI_AGENT_DIR/prompts`.
-
-`.whoami` reads `main-room.json` rather than being told the answer, so it
-reports what is actually recorded. It is told not to read anything else in
-`DATA_DIR`: `token.json`, `auth.json` and `crypto/` sit in the same directory
-and hold the access token and provider credentials.
-
-The template also tells the agent what it *is* — reached through a chat client
-rather than a terminal, one session per room, one run at a time, answers posted
-whole and never edited afterwards, and the commands the bot handles before it
-ever sees them. A slash command skips the room briefing, so `.whoami` on a fresh
-session would otherwise arrive with no context at all. Standing facts an agent
-should know in *every* turn belong in `data/pi/AGENTS.md` instead — see
-[context files](#context-files--the-closest-thing-to-memory).
-
-It deliberately does **not** report the model. `data/agent.json` holds the
-choice that was *recorded*, which is not always what is loaded — an unavailable
-model falls back, and nothing recorded means the default. `.info` answers that
-from the running process, so it is the one that cannot be out of date.
 
 `.reload` calls `AgentSession.reload()` on every live session, not just the room
 that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so
@@ -625,8 +612,8 @@ src/index.js            entry point: client, handlers, shutdown
 src/agent.js            per-room pi sessions, serialization, reply rendering
 src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
-src/prompts.js          installs prompts/ into PI_AGENT_DIR on start
-prompts/                prompt templates that ship with the bot
+src/resources.js        installs agent/ into PI_AGENT_DIR on start
+agent/AGENTS.md         standing instructions that ship with the bot
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 scripts/cross-sign.js  provisioning, matrix-js-sdk only
 docs/pi-integration.md  pi API notes and design decisions
