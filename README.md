@@ -326,6 +326,55 @@ before it was invited anywhere picks one up as soon as it joins, with no
 restart. It warns if the main room has more than two members, since that
 suggests the invite was not the private admin channel it is meant to be.
 
+## Extending the agent
+
+Everything pi loads — extensions, skills, context files, settings — comes from
+`PI_AGENT_DIR` (default `data/pi`), because the bot passes it as `agentDir`.
+So you extend the bot exactly as you would extend pi, pointed at that directory.
+
+**Note the variable is pi's own**, `PI_CODING_AGENT_DIR`, not this project's
+`PI_AGENT_DIR`. The pi CLI ignores ours.
+
+### Extensions
+
+```sh
+PI_CODING_AGENT_DIR=./data/pi npx pi install npm:pi-web-access
+```
+
+That appends to `packages` in `data/pi/settings.json`. **Restart the bot** —
+sessions are created once per room and cached for the process lifetime, so a
+running bot keeps the extension set it started with.
+
+On startup the bot logs what loaded, and says so when one fails:
+
+```
+[agent] Extensions loaded: pi-web-access
+[agent] Extension failed to load (…): …
+```
+
+### Skills
+
+Drop a skill in `data/pi/skills/` and it is available as `/skill:<name>` in
+every room. Same restart rule.
+
+### Context files — the closest thing to memory
+
+pi reads `AGENTS.md` (or `CLAUDE.md`) from two places, and both persist across
+sessions and restarts:
+
+| Location | Scope |
+| --- | --- |
+| `data/pi/AGENTS.md` | Every room, every session — the bot's standing instructions |
+| `$BOT_CWD/AGENTS.md`, and every ancestor directory | Project scope |
+
+`data/pi/AGENTS.md` is the natural home for things the agent should always know.
+Note the project-scoped one follows `BOT_CWD`, so with the default under `/tmp`
+it will not survive a reboot — point `BOT_CWD` at a durable path if you intend
+to keep context there.
+
+This is distinct from conversation history, which `SESSION_DIR` persists per
+room. Context files are instructions; sessions are what was said.
+
 ## Scripts
 
 | Command | What it does |

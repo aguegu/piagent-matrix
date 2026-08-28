@@ -179,6 +179,22 @@ export class AgentManager {
       if (result.modelFallbackMessage) {
         LogService.warn("agent", `model fallback: ${result.modelFallbackMessage}`);
       }
+
+      // Extensions come from settings.json in agentDir, installed with
+      // `pi install`. Report what loaded: otherwise there is no way to tell an
+      // extension is active short of asking the agent to use it, and a failed
+      // load is silent.
+      const loaded = result.extensionsResult?.extensions ?? [];
+      const failed = result.extensionsResult?.errors ?? [];
+      if (loaded.length) {
+        LogService.info(
+          "agent",
+          `Extensions loaded: ${loaded.map((e) => e.name ?? e.path ?? "?").join(", ")}`,
+        );
+      }
+      for (const e of failed) {
+        LogService.error("agent", `Extension failed to load (${e.path}): ${e.error}`);
+      }
       const persisted = this.opts.sessionDir ? "persistent" : "in-memory";
       LogService.info("agent", `Created ${persisted} agent session for room ${roomId}`);
       return result.session;
