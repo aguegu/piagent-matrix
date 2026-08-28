@@ -133,9 +133,9 @@ node -e "import('@earendil-works/pi-coding-agent').then(async m=>{
 })"
 ```
 
-Left empty, the bot uses the first available. `PI_MODEL` in `.env.local` pins a
-different one for a fresh install, e.g. `anthropic/claude-opus-4-5` — but from
-then on it is easier to say **`.model`** in the main room, which records the choice.
+The bot starts on the first available. There is nothing to configure: say
+**`.model <provider/id>`** in the main room to pick another, and the choice is
+recorded under `DATA_DIR/agent.json` so it survives restarts.
 
 ### 5. First start
 
@@ -241,8 +241,6 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `MATRIX_RECOVERY_KEY` | no | Only for `npm run cross-sign`; the bot never reads it |
 | `DATA_DIR` | no | Identity and crypto store. Default `./data` |
 | `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
-| `PI_MODEL` | no | First-run default only; `.model` records a choice that wins. `provider/model-id` or a bare id. Default: first available |
-| `PI_THINKING_LEVEL` | no | First-run default only; `.thinking` records a choice that wins. `off`…`max`. Default `low` |
 | `PI_AGENT_DIR` | no | pi's auth and settings. Default `${DATA_DIR}/pi` |
 | `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `/tmp/piagent-workspace`; the bot refuses to start if unset |
 | `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
@@ -431,12 +429,17 @@ reloading one room would leave the rest stale. Sessions and their history
 survive; only the resources are re-read. It is the restart that the *Extending
 the agent* section would otherwise require.
 
-`.model` and `.thinking` exist so you do not have to edit `.env.local` and
-restart to change either. Bare, they report where you are and list what is on
-offer — a room cannot present pi's selector UI. With an argument, they apply the
-change to every live session and **record it under `DATA_DIR/agent.json`**, so
-it survives a restart. That recording is the point: `PI_MODEL` and
-`PI_THINKING_LEVEL` are only what a bot that has never been told starts with.
+`.model` and `.thinking` are how the agent is configured — there is no env var
+for either. Bare, they report where you are and list what is on offer, since a
+room cannot present pi's selector UI. With an argument, they apply the change to
+every live session and **record it under `DATA_DIR/agent.json`**, so it survives
+a restart. A bot that has never been told starts on the first available model at
+thinking level `low`.
+
+Neither is read from the environment, on purpose. An interactive `pi` run
+exports `PI_MODEL` and `PI_PROVIDER` into the shell, so honouring them let a
+stray export decide the bot's model — invisible influence, and pointless once
+the choice is a command away.
 
 Anything unrecognised is an ordinary prompt. `/login` and `/compact`
 are deliberately **not** wired up: they need a back-and-forth a room cannot give,

@@ -52,10 +52,12 @@ renders a final answer renders nothing, while its text lands in the previous
 run's output. Serialize runs per room; subscribe before awaiting so the start is
 not missed.
 
-**`PI_MODEL` is often a bare id.** A `pi` CLI run exports `PI_MODEL=MiniMax-M3`
-and `PI_PROVIDER=minimax-cn` separately, so `want.split("/")` yields one element
-and the lookup fails. Fall back to `PI_PROVIDER` when there is no slash — as a
-hint, not an override, and log what was actually chosen.
+**A `pi` CLI run exports the model in two halves.** `PI_MODEL=MiniMax-M3` and
+`PI_PROVIDER=minimax-cn`, so a bare id is what the shell usually holds and
+`want.split("/")` yields one element. This bot does not read either: the model
+is a runtime setting recorded in `data/agent.json`, and honouring the shell let
+a leftover export decide it invisibly. A bare id typed into `.model` matches on
+id alone, and the reply names the full `provider/id` it settled on.
 
 `tool_execution_start` / `tool_execution_end` arrive on the same subscription
 and are worth surfacing: during a long tool call nothing else is emitted, so the
@@ -88,8 +90,6 @@ ones are:
 | Env var | Default | Used for |
 | --- | --- | --- |
 | `BOT_CWD` | `/tmp/piagent-workspace` (from `.env`) | agent working directory; the bot refuses to start if unset |
-| `PI_MODEL` | first available | `provider/id`, or bare `id`. First-run default; `.model` records a choice that wins |
-| `PI_THINKING_LEVEL` | `low` | `off`…`max`. First-run default; `.thinking` records a choice that wins |
 | `PI_AGENT_DIR` | `${DATA_DIR}/pi` | pi's auth, settings, skills, extensions |
 | `SESSION_DIR` | `./sessions` | per-room conversation history |
 | `OUTBOX_DIR` | `./outbox` | spool the agent can write to |
@@ -105,6 +105,7 @@ ones are:
   persists, but clearing `data/` makes the bot replay old history — which now
   means *executing* it.
 - Shell-level `PI_MODEL` / `PI_PROVIDER` from a prior `pi` run leak into the
-  bot's environment. Treated as a hint; the bot logs what it used.
+  bot's environment. Neither is read — the model is recorded in
+  `data/agent.json` and set with `.model`.
 - Sessions are cached per room for the process lifetime, so newly installed
   extensions and skills need a restart.

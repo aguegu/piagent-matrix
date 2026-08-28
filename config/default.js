@@ -45,12 +45,16 @@ export default {
     // Unaddressed *.txt drops go to the main room; see matrix.mainRoom.
   },
   agent: {
-    // Startup default only, and optional. `.model` in a room records a choice
-    // in stateFile, which wins over this; PI_MODEL exists for a fresh install
-    // or a container that has never been told. Empty means first available.
-    model: process.env.PI_MODEL || "",
-    // Startup default only, like model. `.thinking` records a choice that wins.
-    thinkingLevel: process.env.PI_THINKING_LEVEL || "low",
+    // What a bot that has never been told starts with. Both are runtime
+    // settings now: `.model` and `.thinking` in the main room record a choice
+    // in stateFile, which wins over these.
+    //
+    // Deliberately not read from the environment. An interactive `pi` run
+    // exports PI_MODEL and PI_PROVIDER into the shell, so honouring them let a
+    // stray export decide the bot's model on a fresh install — invisible, and
+    // pointless once the choice is a command away. Empty means first available.
+    model: "",
+    thinkingLevel: "low",
     // Where `.model` and `.thinking` record their choices, beside the bot's
     // other state rather than in pi's directory — these are the bot's settings,
     // not pi's.

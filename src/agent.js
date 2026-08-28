@@ -38,8 +38,8 @@ export class AgentManager {
     // Absolute, or null to fall back to pi's own default (~/.pi/agent).
     this.agentDir = opts.agentDir ? resolve(opts.agentDir) : null;
     // `.model` and `.thinking` record their choices here so they survive a
-    // restart; that is the point of those commands, and why PI_MODEL and
-    // PI_THINKING_LEVEL are only first-run defaults.
+    // restart; that is the point of those commands, and why neither setting is
+    // configured anywhere else.
     this.stateFile = opts.stateFile ? resolve(opts.stateFile) : null;
     /** @type {Map<string, Promise<import('@earendil-works/pi-coding-agent').AgentSession>>} */
     this.sessions = new Map();
@@ -79,9 +79,8 @@ export class AgentManager {
       throw new Error(describeMissingAuth(agentDir));
     }
 
-    // Precedence: a choice recorded by `.model`, then PI_MODEL, then whatever
-    // is first available. The recorded one wins so a switch made in a room is
-    // not silently undone by a stale environment variable.
+    // Precedence: a choice recorded by `.model`, then opts.model, then whatever
+    // is first available.
     const recorded = this.#readState().model;
     const want = recorded || this.opts.model;
     if (want) {
@@ -135,7 +134,7 @@ export class AgentManager {
     return lines.join("\n");
   }
 
-  /** Recorded choice first, then PI_THINKING_LEVEL, then "low". */
+  /** A choice recorded by `.thinking` first, then opts, then "low". */
   #thinkingLevel() {
     const want = String(this.#readState().thinkingLevel || this.opts.thinkingLevel || "low").toLowerCase();
     return THINKING_LEVELS.includes(want) ? want : "low";
@@ -154,8 +153,8 @@ export class AgentManager {
   /**
    * Set the thinking level, as pi's `/thinking <level>` does, and remember it.
    *
-   * Applies to every live session and is recorded, so it replaces setting
-   * PI_THINKING_LEVEL rather than reverting on the next restart.
+   * Applies to every live session and is recorded, so it holds across restarts
+   * rather than reverting to the startup default.
    */
   async setThinkingLevel(level) {
     const want = String(level ?? "").trim().toLowerCase();
@@ -442,8 +441,8 @@ export class AgentManager {
    * Switch the model, as pi's `/model <provider/model>` does, and remember it.
    *
    * Applies to every live session and to any created later, and is recorded so
-   * it survives a restart — this is meant to replace setting PI_MODEL, not to
-   * be a per-room override that quietly reverts.
+   * it survives a restart — this is how the model is configured, not a per-room
+   * override that quietly reverts.
    *
    * @returns {Promise<{ ok: boolean, model?: string, applied?: number, available?: string[] }>}
    */
@@ -564,10 +563,14 @@ async function waitUntilIdle(session, timeoutMs = 120_000) {
 /**
  * Resolve "provider/id" or a bare "id" against the available models.
  *
- * A bare id is what the shell usually holds: a prior `pi` run exports PI_MODEL
- * and PI_PROVIDER separately, so PI_PROVIDER breaks the tie when no provider is
- * given. Returns null when nothing matches, leaving the caller to decide
- * whether that is a warning or an error.
+ * A bare id matches on id alone. PI_PROVIDER used to break the tie, back when
+ * the model came from the environment and an interactive `pi` run exports the
+ * two halves separately — but the model is typed into a room now, so letting a
+ * shell export steer what a chat message resolves to is influence nobody can
+ * see. `.model` reports the full provider/id it settled on.
+ *
+ * Returns null when nothing matches, leaving the caller to decide whether that
+ * is a warning or an error.
  */
 function matchModel(available, want) {
   if (!want) return null;
@@ -577,8 +580,6 @@ function matchModel(available, want) {
     const [p, ...rest] = id.split("/");
     provider = p;
     id = rest.join("/");
-  } else if (process.env.PI_PROVIDER) {
-    provider = process.env.PI_PROVIDER;
   }
   const exact = available.find((m) => m.id === id && (!provider || m.provider === provider));
   if (exact) return exact;
