@@ -1,5 +1,7 @@
 # Releases
 
+## 0.2.1 (in progress)
+
 ## 0.2.0 (2026-08-28)
 
 Hardening pass over the agent path, plus the plumbing needed to run the bot
