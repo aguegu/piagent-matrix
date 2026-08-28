@@ -473,6 +473,33 @@ reloading one room would leave the rest stale. Sessions and their history
 survive; only the resources are re-read. It is the restart that the *Extending
 the agent* section would otherwise require.
 
+`.rooms` answers "where has this bot been invited", which is otherwise visible
+only in the startup log. Each line gives the room's name, its id and how many
+members it has, and marks the main room. Names are written by whoever made the
+room, so they print in a code span rather than rendered — the sanitiser already
+blocks anything dangerous, but a room called `**urgent**` should not shout in
+the listing.
+
+`.rooms leave <roomId>` leaves one room, straight away. Naming an id copied out
+of the listing is deliberate on its own, so there is nothing to confirm; a
+copied pair of backticks is stripped, since the listing prints ids in code
+spans. Naming the main room's own id works too — whoever can type it there can
+kick the bot out anyway, and more easily. The goodbye goes out before the bot
+leaves, since afterwards there is no room to send it to; the record goes with
+the room, so the next fitting room becomes the control channel and is told so.
+
+`.rooms leave all` does every room except the main one, for tidying up after
+testing or retiring a bot from a set of projects. **That one asks first**, since
+"all" is not deliberate the way an id is: it lists what would go, and only
+`.rooms leave all confirm` does it. Leaving is visible to everyone in those
+rooms, getting back in needs a fresh invite, and the bot cannot read anything
+said while it is away. The main room is never included — it is where the report
+has to land.
+
+Either way, each room's cached pi session is dropped as the bot goes; with
+`SESSION_DIR` set the conversation is still on disk and resumes if it is invited
+back. A room that fails to leave is reported rather than stranding the rest.
+
 `.model` and `.thinking` are how the agent is configured — there is no env var
 for either. Bare, they report where you are and list what is on offer, since a
 room cannot present pi's selector UI. With an argument, they apply the change to
