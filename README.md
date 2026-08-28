@@ -246,7 +246,6 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `MATRIX_PASSWORD` | first run | Initial login, and `cross-sign` |
 | `MATRIX_ALLOWED_USERS` | no | Comma-separated MXIDs. **Empty means everyone is allowed** |
 | `MATRIX_DEVICE_NAME` | no | Shown in Element's session list |
-| `MATRIX_MAIN_ROOM` | no | Pins the main room. Normally unset — see below |
 | `MATRIX_RECOVERY_KEY` | no | Only for `npm run cross-sign`; the bot never reads it |
 | `DATA_DIR` | no | Identity and crypto store. Default `./data` |
 | `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
@@ -314,7 +313,10 @@ The bot's control channel: normally the room holding just the bot and its admin.
 Unaddressed `*.txt` outbox drops go here, and it is where operational output
 belongs.
 
-**It is recorded, not configured**, in `data/main-room.json`. Recording means a
+**It is recorded, not configured**, in `data/main-room.json`. There is no
+environment variable for it: an override existed while a wrong record could only
+be corrected on the host, and now that kicking the bot out drops the record, a
+second source of truth would only be something to argue with. Recording means a
 bot started before it was invited anywhere picks a room up as soon as it joins,
 with no restart.
 
@@ -330,7 +332,6 @@ busy working room cannot become one by accident.
 | Invited to a room that does not fit | Not adopted; logged with the reason |
 | No main room at startup, one joined room fits | Adopted |
 | No main room at startup, several fit | Refuses to guess; warns |
-| `MATRIX_MAIN_ROOM` set | Pins that room; never unset, never replaced |
 
 **The record is dropped as soon as it stops being usable** — the bot is kicked
 from the main room, or starts up to find itself no longer in it. A pointer to a
@@ -356,9 +357,8 @@ and the room that gets the powers should be told it has them. A failed notice is
 logged, not thrown; the adoption still stands.
 
 **It is checked at every start.** A recorded room used to be trusted on sight,
-so one the bot had been kicked from — or a mistyped `MATRIX_MAIN_ROOM` — looked
-healthy right up until every command was refused and outbox drops piled up as
-`.failed`. Three things are checked: the bot is in it (dropping the record if
+so one the bot had been kicked from looked healthy right up until every command
+was refused and outbox drops piled up as `.failed`. Three things are checked: the bot is in it (dropping the record if
 not), an allowlisted user is in it, and it has no more than two members. The
 warning goes to the log always, and into the main room only when there is
 someone there to act on it — never to a room the bot is not in, and never to one

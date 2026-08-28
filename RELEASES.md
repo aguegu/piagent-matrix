@@ -8,6 +8,7 @@ checked rather than trusted.
 ### Breaking Changes
 
 * `PI_MODEL` and `PI_THINKING_LEVEL` are gone: removed from `.env` and no longer read from the environment at all, along with the `PI_PROVIDER` tie-break for a bare model id. Both are runtime settings now — say `.model <provider/id>` and `.thinking <level>` once in the main room and the choice is recorded in `DATA_DIR/agent.json`. A bot that has never been told starts on the first available model at thinking level `low`. Reading them was worse than redundant: an interactive `pi` run exports `PI_MODEL` and `PI_PROVIDER` into the shell, so an operator who had run pi in that terminal handed the bot a model without knowing
+* `MATRIX_MAIN_ROOM` is gone. It was the escape hatch for a wrong record back when the only correction was editing `data/main-room.json` on the host; kicking the bot out of the main room now drops the record and the next fitting room takes over, so a second source of truth would only be something to argue with
 * A room is adopted as the main room when there is none recorded and the room **fits**: the bot is in it, it holds no more than two members, and — when `MATRIX_ALLOWED_USERS` is set — one of them may run commands. That replaces "the first room joined", which said nothing about whether the room was suitable and let whoever invited the bot decide. A stranger can no longer hand it a control channel, and a busy working room cannot become one by accident
 
 ### New Features
@@ -20,7 +21,7 @@ checked rather than trusted.
 * **The main room record is dropped as soon as it stops being usable** — the bot is kicked from it, or starts up to find itself no longer in it — and the next room that fits takes over. A pointer to an unreachable room was worse than none: commands run in the main room and nowhere else, so the bot went silent while looking healthy, and every alternative was declined because a room was *already* recorded. Recovering meant deleting `data/main-room.json` on the host. Moving the control channel is now kick-then-invite: a room just joined wins outright if it fits
 * `room.leave` is handled, covering kicked, banned and left alike. Leaving any room is logged with who did it and why; leaving the main room drops the record
 * Strict to adopt, lenient to keep: a main room that later grows past two members, or whose admin steps out, is warned about but kept — it still works. Only being outside the room is disqualifying
-* The main room is verified at every start: the bot is in it, an allowlisted user is in it, and it holds no more than two members. A recorded room was trusted on sight, so one the bot had been kicked from — or a mistyped `MATRIX_MAIN_ROOM` — looked healthy right up until every command was refused and outbox drops piled up as `.failed`. No check blocks startup: a bot that refused to start could not accept the invite that fixes it. Being outside the room clears the record; the other two warn. The notice reaches the main room only where someone can act on it, and the log always gets everything
+* The main room is verified at every start: the bot is in it, an allowlisted user is in it, and it holds no more than two members. A recorded room was trusted on sight, so one the bot had been kicked from looked healthy right up until every command was refused and outbox drops piled up as `.failed`. No check blocks startup: a bot that refused to start could not accept the invite that fixes it. Being outside the room clears the record; the other two warn. The notice reaches the main room only where someone can act on it, and the log always gets everything
 * `reload()` calls pi's `AgentSession.reload()` on each live session rather than disposing them, matching the TUI: resources are re-read, sessions and their history survive
 
 ### Fixes
@@ -29,7 +30,7 @@ checked rather than trusted.
 
 ### Tests
 
-* 68 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
+* 66 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
 
 ## 0.2.0 (2026-08-28)
 

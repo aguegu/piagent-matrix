@@ -449,14 +449,14 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
     LogService.warn(
       "bot",
       "No main room, and none of the rooms this bot is in fits one. Invite it to a room " +
-        "holding only itself and an allowed user, or set MATRIX_MAIN_ROOM.",
+        "holding only itself and a user from MATRIX_ALLOWED_USERS.",
     );
     return;
   }
   LogService.warn(
     "bot",
     `No main room, and ${fits.length} rooms would fit (${fits.join(", ")}), so there is no safe ` +
-      "guess. Invite the bot to the room you want, or set MATRIX_MAIN_ROOM.",
+      "guess. Invite the bot to the room you want and it takes that one.",
   );
 }
 
@@ -476,7 +476,7 @@ async function main() {
   LogService.muteModule("Metrics");
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
-  mainRoom = new MainRoom(resolve(storagePaths.dataDir), matrix.mainRoom);
+  mainRoom = new MainRoom(resolve(storagePaths.dataDir));
   // The agent's working directory must exist before pi opens a session in it.
   mkdirSync(config.get("agent.cwd"), { recursive: true });
 

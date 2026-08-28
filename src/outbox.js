@@ -91,7 +91,7 @@ export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } =
           if (!room) {
             throw new Error(
               "no room in the file and no main room established — name the room in a " +
-                ".json drop, or set one (see MATRIX_MAIN_ROOM)",
+                ".json drop, or invite the bot to a room that can be its main room",
             );
           }
           if (!body.trim()) throw new Error("empty body");

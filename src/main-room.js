@@ -25,8 +25,10 @@
 // members, or whose admin steps out, is warned about but not dropped. Only
 // being outside the room is disqualifying, because only that stops it working.
 //
-// Precedence: MATRIX_MAIN_ROOM (explicit override, never unset and never
-// replaced) > recorded > adopted from a room that fits > none.
+// There is no way to configure it. An override existed while a wrong record
+// could only be corrected on the host; now that kicking the bot out drops the
+// record and the next fitting room takes over, a second source of truth would
+// only be something to argue with.
 
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -54,20 +56,11 @@ export function roomFits(members, allowedUsers = []) {
 
 export class MainRoom {
   #path;
-  #configured;
   #roomId = "";
 
-  /**
-   * @param {string} dataDir  where the record lives, beside the bot's other state
-   * @param {string} configured  MATRIX_MAIN_ROOM, or "" to use the recorded value
-   */
-  constructor(dataDir, configured = "") {
+  /** @param {string} dataDir  where the record lives, beside the bot's other state */
+  constructor(dataDir) {
     this.#path = join(dataDir, "main-room.json");
-    this.#configured = configured;
-    if (configured) {
-      this.#roomId = configured;
-      return;
-    }
     try {
       const saved = JSON.parse(readFileSync(this.#path, "utf8"));
       if (typeof saved?.roomId === "string") this.#roomId = saved.roomId;
@@ -81,11 +74,6 @@ export class MainRoom {
     return this.#roomId;
   }
 
-  /** True when MATRIX_MAIN_ROOM pins it, so nothing observed can change it. */
-  get isPinned() {
-    return Boolean(this.#configured);
-  }
-
   /** True once a record exists on disk. */
   get isRecorded() {
     return existsSync(this.#path);
@@ -94,7 +82,7 @@ export class MainRoom {
   /** One line for the startup log. */
   describe() {
     if (!this.#roomId) return "No main room yet — the first room that fits becomes it.";
-    return `Main room is ${this.#roomId}${this.isPinned ? " (pinned by MATRIX_MAIN_ROOM)" : ""}.`;
+    return `Main room is ${this.#roomId}.`;
   }
 
   /**
@@ -130,23 +118,10 @@ export class MainRoom {
    * failure: commands are refused everywhere else and unreachable there, so
    * the only fix was editing a file on the host.
    *
-   * A pinned room is never unset. MATRIX_MAIN_ROOM is a deliberate statement,
-   * the record would come back from the environment on the next start anyway,
-   * and quietly overriding it would leave the operator arguing with a file
-   * that is not the source of truth.
-   *
    * @returns {boolean} true if this call cleared it
    */
   unset(why) {
     if (!this.#roomId) return false;
-    if (this.isPinned) {
-      LogService.warn(
-        "bot",
-        `Main room ${this.#roomId} is unusable (${why}), but MATRIX_MAIN_ROOM pins it, so it is ` +
-          "kept. Fix the room, or unset the variable to let the bot adopt another.",
-      );
-      return false;
-    }
     const was = this.#roomId;
     this.#roomId = "";
     try {
@@ -164,8 +139,8 @@ export class MainRoom {
    * Check an established main room against what the server actually says.
    *
    * A recorded room used to be trusted on sight, so one the bot had been
-   * kicked from — or a mistyped MATRIX_MAIN_ROOM — looked healthy right up
-   * until every command was refused and the outbox filled with .failed drops.
+   * kicked from looked healthy right up until every command was refused and
+   * the outbox filled with .failed drops.
    *
    * Only `present` is disqualifying; the caller unsets on it. The other two
    * are warnings about a room that still works.
@@ -182,12 +157,7 @@ export class MainRoom {
 
     out.present = Array.isArray(joined) && joined.includes(roomId);
     if (!out.present) {
-      out.problems.push(
-        this.isPinned
-          ? `MATRIX_MAIN_ROOM names ${roomId}, which this bot is not in. Check the room id, ` +
-            "or invite the bot to that room."
-          : `The bot is not in its main room ${roomId} — kicked, or it left.`,
-      );
+      out.problems.push(`The bot is not in its main room ${roomId} — kicked, or it left.`);
       // Nothing else is knowable from outside a room.
       for (const p of out.problems) LogService.warn("bot", p);
       return out;

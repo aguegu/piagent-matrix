@@ -68,16 +68,6 @@ describe("MainRoom", () => {
     assert.equal(new MainRoom(dir).roomId, "!kept:example.org", "read back from disk");
   });
 
-  it("lets MATRIX_MAIN_ROOM pin a different room than the recorded one", () => {
-    new MainRoom(dir).adopt("!recorded:example.org", "first room that fits");
-
-    const pinned = new MainRoom(dir, "!pinned:example.org");
-    assert.equal(pinned.roomId, "!pinned:example.org");
-    assert.equal(pinned.isPinned, true);
-    assert.equal(pinned.adopt("!other:example.org", "first room that fits"), false);
-    assert.equal(pinned.roomId, "!pinned:example.org");
-  });
-
   it("tolerates an unreadable record rather than failing to start", () => {
     writeFileSync(join(dir, "main-room.json"), "{ not json");
     assert.equal(new MainRoom(dir).roomId, "");
@@ -96,12 +86,11 @@ describe("MainRoom", () => {
       assert.equal(mr.adopt("!next:example.org", "the main room was lost"), true, "a new room can fill it");
     });
 
-    it("does not unset a room pinned by MATRIX_MAIN_ROOM", () => {
-      // The record would come back from the environment on the next start, so
-      // clearing it would leave the operator arguing with a file.
-      const pinned = new MainRoom(dir, ROOM);
-      assert.equal(pinned.unset("the bot is not in it"), false);
-      assert.equal(pinned.roomId, ROOM);
+    it("comes back unset after a restart, since the file is gone", () => {
+      const mr = new MainRoom(dir);
+      mr.adopt(ROOM, "first room that fits");
+      mr.unset("the bot was kicked from it");
+      assert.equal(new MainRoom(dir).roomId, "", "nothing to argue with on the next start");
     });
 
     it("is a no-op when there is nothing to drop", () => {
@@ -130,12 +119,6 @@ describe("MainRoom", () => {
       assert.equal(r.present, false);
       assert.equal(r.problems.length, 1);
       assert.match(r.problems[0], /not in its main room/);
-    });
-
-    it("names MATRIX_MAIN_ROOM when a pinned room is the one missing", () => {
-      const pinned = new MainRoom(dir, "!typo:example.org");
-      const r = pinned.verify([ROOM], null, [ADMIN]);
-      assert.match(r.problems[0], /MATRIX_MAIN_ROOM/, "a mistyped id is the likelier cause");
     });
 
     it("warns about a control channel with no admin, but keeps it", () => {
