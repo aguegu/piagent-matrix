@@ -464,7 +464,7 @@ belong to the main room** — see below.
 | --- | --- | --- |
 | `.info` | any room | Shows the model and thinking level in use |
 | `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
-| `.whoami` | main room | Reports the bot's main room, the admin it was adopted for, and its workspace |
+| `.whoami` | main room | Reports what the bot is, its main room, the admin it was adopted for, and its workspace |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -514,6 +514,14 @@ style, and lives only in that host's `PI_AGENT_DIR/prompts`.
 reports what is actually recorded. It is told not to read anything else in
 `DATA_DIR`: `token.json`, `auth.json` and `crypto/` sit in the same directory
 and hold the access token and provider credentials.
+
+The template also tells the agent what it *is* — reached through a chat client
+rather than a terminal, one session per room, one run at a time, answers posted
+whole and never edited afterwards, and the commands the bot handles before it
+ever sees them. A slash command skips the room briefing, so `.whoami` on a fresh
+session would otherwise arrive with no context at all. Standing facts an agent
+should know in *every* turn belong in `data/pi/AGENTS.md` instead — see
+[context files](#context-files--the-closest-thing-to-memory).
 
 It deliberately does **not** report the model. `data/agent.json` holds the
 choice that was *recorded*, which is not always what is loaded — an unavailable
