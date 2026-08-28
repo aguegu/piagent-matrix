@@ -29,9 +29,14 @@ export const SHIPPED = fileURLToPath(new URL("../agent", import.meta.url));
 /**
  * Marks a file as the bot's to rewrite.
  *
- * AGENTS.md is also the natural place for an operator's own standing
+ * AGENTS.md is also where an operator would put their own standing
  * instructions, and overwriting those would be theft. Only a file carrying this
  * line is replaced; anything else is left exactly as it is.
+ *
+ * The two cannot share a directory. pi takes the first of AGENTS.override.md,
+ * AGENTS.md, AGENTS.MD, CLAUDE.md, CLAUDE.MD that exists there and ignores the
+ * rest — so keeping someone's file means the bot's own instructions do not load
+ * at all, which is why that case warns rather than passing quietly.
  */
 export const MANAGED = "<!-- managed by piagent-matrix — edit agent/ in the repo, not this copy -->";
 
@@ -81,8 +86,10 @@ export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
         kept.push(file);
         LogService.warn(
           "bot",
-          `${path} was not written by this bot, so it is left alone. Its own ${file} is not ` +
-            "installed; move your instructions elsewhere, or delete the file to accept them.",
+          `${path} was not written by this bot, so it is left alone — and the bot's own ${file} ` +
+            "is therefore not installed, because pi reads only one context file per directory. " +
+            "The bot then does not know what it is. Move those instructions to " +
+            "$BOT_CWD/AGENTS.md, which pi loads as well, and delete this file.",
         );
         continue;
       }

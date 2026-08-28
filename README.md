@@ -431,8 +431,12 @@ sessions and restarts:
 
 | Location | Scope |
 | --- | --- |
-| `data/pi/AGENTS.md` | Every room, every session — the bot's standing instructions |
-| `$BOT_CWD/AGENTS.md`, and every ancestor directory | Project scope |
+| `data/pi/AGENTS.md` | Every room, every session — the bot's standing instructions, shipped and installed (below) |
+| `$BOT_CWD/AGENTS.md`, and every ancestor directory | Project scope — and where your own instructions go |
+
+pi takes the **first** of `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`,
+`CLAUDE.md`, `CLAUDE.MD` in each directory and ignores the others, so there is
+room for one file per directory, not one per purpose.
 
 `data/pi/AGENTS.md` is the natural home for things the agent should always know.
 Note the project-scoped one follows `BOT_CWD`, so with the default under `/tmp`
@@ -459,9 +463,15 @@ and `{{OUTBOX_DIR}}` are substituted as the file is written. Edit `agent/`, not
 the installed copy: the next start overwrites it.
 
 **An `AGENTS.md` the bot did not write is never touched.** The installed copy
-carries a marker line, and a file without it is left exactly as it is, with a
-warning — that file is also the natural home for your own standing
-instructions.
+carries a marker line; a file without it is left exactly as it is, with a
+warning.
+
+That case is worth avoiding rather than living with. pi reads **one context file
+per directory** — the first of `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`,
+`CLAUDE.md`, `CLAUDE.MD` — so a file of yours in `data/pi/` keeps the bot's out,
+and the agent no longer knows what it is. Put your own standing instructions in
+`$BOT_CWD/AGENTS.md` instead: it is a different directory, so pi loads it as
+well as the bot's.
 
 This is distinct from conversation history, which `SESSION_DIR` persists per
 room. Context files are instructions; sessions are what was said.
