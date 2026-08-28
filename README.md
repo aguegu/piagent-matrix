@@ -314,63 +314,59 @@ The bot's control channel: normally the room holding just the bot and its admin.
 Unaddressed `*.txt` outbox drops go here, and it is where operational output
 belongs.
 
-**It is recorded, not configured.** The first room the bot is invited to becomes
-the main room, written to `data/main-room.json`. That has to be observed at join
-time — `getJoinedRooms()` has no meaningful order, so "first" cannot be
-recovered afterwards.
+**It is recorded, not configured**, in `data/main-room.json`. Recording means a
+bot started before it was invited anywhere picks a room up as soon as it joins,
+with no restart.
 
-**Adoption is a 0 → 1 transition, and only that.** The bot takes its control
-channel from the room it is invited to *while it is in no others*. It does not
-take it from whichever room it happens to join next: a bot already sitting in
-rooms that has lost its record adopts nothing, because the next arrival is an
-arbitrary room and adopting it would hand the control channel to whoever sent
-that invite, quietly. An unknown room count declines too — not adopting is the
-outcome an operator can still fix.
+**A room is adopted when there is no main room and the room fits**: the bot is
+in it, it holds no more than two members, and — when `MATRIX_ALLOWED_USERS` is
+set — one of them may run commands. That last part is what makes adoption safe.
+A stranger cannot hand the bot a control channel by inviting it somewhere, and a
+busy working room cannot become one by accident.
 
 | Situation | What happens |
 | --- | --- |
-| Invited while in no other room | Adopted and recorded |
-| Invited while already in rooms, none recorded | Not adopted; warns. Set `MATRIX_MAIN_ROOM` or write the id into `data/main-room.json` |
-| Existing bot, one joined room | Adopted at startup and recorded |
-| Existing bot, several joined rooms | Refuses to guess; warns |
-| `MATRIX_MAIN_ROOM` set | Pins that room; nothing observed overrides it |
+| Invited to a room that fits, with none recorded | Adopted, and the bot says so in that room |
+| Invited to a room that does not fit | Not adopted; logged with the reason |
+| No main room at startup, one joined room fits | Adopted |
+| No main room at startup, several fit | Refuses to guess; warns |
+| `MATRIX_MAIN_ROOM` set | Pins that room; never unset, never replaced |
 
-**The bot says so when it adopts.** It posts in the room it just took as its
-control channel — commands run here, later output arrives here, other rooms get
-`.info` only. Otherwise adoption is invisible: it happens on join and goes
-straight to disk, and the room that gets the powers should be told it has them.
-A failed notice is logged, not thrown; the adoption still stands.
+**The record is dropped as soon as it stops being usable** — the bot is kicked
+from the main room, or starts up to find itself no longer in it. A pointer to a
+room the bot cannot reach is worse than no pointer at all: commands run in the
+main room and nowhere else, so the bot goes silent while looking healthy, and
+every alternative is declined because a room is *already* recorded. Dropping it
+lets the next room that fits take over, so recovering never means editing a file
+on the host.
 
-To re-elect — the first invite was a scratch room, say — delete
-`data/main-room.json`, remove the bot from every room, and re-invite it to the
-one you want; or set `MATRIX_MAIN_ROOM`. Deleting the record alone is no longer
-enough, since a bot still sitting in other rooms will decline to adopt.
+So to move the control channel: kick the bot from the main room, then invite it
+to the one you want. The invite is the signal — a room just joined wins outright
+if it fits, which is how an admin re-elects without touching the host.
 
-The main room is read per send rather than captured at startup, so a bot started
-before it was invited anywhere picks one up as soon as it joins, with no
-restart.
+**Strict to adopt, lenient to keep.** A main room that later grows past two
+members, or whose admin steps out, is warned about but not dropped: it still
+works. Only being outside the room is disqualifying, because only that stops it
+working.
 
-**It is checked at every start.** A recorded room used to be trusted on sight —
-the bot logged `Main room is !x` and carried on, so one it had been kicked from,
-or a mistyped `MATRIX_MAIN_ROOM`, looked healthy right up until every command
-was refused and outbox drops piled up as `.failed`. Three things are checked:
+**The bot says so when it adopts.** It posts in the room it just took —
+commands run here, later output arrives here, other rooms get `.info` only.
+Otherwise adoption is invisible: it happens on join and goes straight to disk,
+and the room that gets the powers should be told it has them. A failed notice is
+logged, not thrown; the adoption still stands.
 
-| Check | Why it matters |
-| --- | --- |
-| The bot is actually in it | Otherwise commands run nowhere: they are refused everywhere else, and the one room that accepts them is unreachable |
-| An allowlisted user is in it | A control channel with nobody allowed to command it |
-| It has no more than two members | It is meant to be the bot and its admin |
-
-A failed check **warns; it never blocks startup and never clears the record.**
-The bot has to stay up, because a kicked bot is fixed by re-inviting it and one
-that refused to start could not accept the invite — and the record is what makes
-that re-invite land back on the same room, so dropping it would trade a
-one-click recovery for a manual one.
-
-The warning goes to the log always, and into the main room only when there is
+**It is checked at every start.** A recorded room used to be trusted on sight,
+so one the bot had been kicked from — or a mistyped `MATRIX_MAIN_ROOM` — looked
+healthy right up until every command was refused and outbox drops piled up as
+`.failed`. Three things are checked: the bot is in it (dropping the record if
+not), an allowlisted user is in it, and it has no more than two members. The
+warning goes to the log always, and into the main room only when there is
 someone there to act on it — never to a room the bot is not in, and never to one
 holding no allowed user, since a room of strangers is the last place to announce
 that it is the bot's control channel.
+
+The main room is read per send rather than captured at startup, so a room
+adopted later takes effect immediately.
 
 ## Extending the agent
 

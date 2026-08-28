@@ -28,7 +28,7 @@ import { renderMarkdown } from "./markdown.js";
 import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
-import { MainRoom } from "./main-room.js";
+import { MainRoom, roomFits } from "./main-room.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -368,27 +368,38 @@ async function announceMainRoom(client, roomId) {
   }
 }
 
+/** Members of a room, or null when the lookup fails. */
+function roomMembers(client, roomId) {
+  return client.getJoinedRoomMembers(roomId).catch(() => null);
+}
+
 /**
- * Check the main room and report anything wrong with it.
+ * Check the main room, and drop the record if the bot is not in it.
  *
- * See MainRoom#verify for why a failure warns rather than blocking startup.
+ * Being outside the room is the one disqualifying failure: commands run there
+ * and nowhere else, so the bot would go silent while looking healthy, and every
+ * alternative room would be declined because one is "already" recorded.
+ * Dropping it lets another room take over without anyone editing a file on the
+ * host. The other problems describe a room that still works, so they only warn.
+ *
  * The chat notice goes out only where someone can act on it: not to a room the
  * bot is not in, obviously, and not to one holding no allowed user — a room of
- * strangers is the last place to announce that it is the bot's control channel.
+ * strangers is the last place to announce that it is the bot's control room.
  * The log always gets everything.
  */
 async function verifyMainRoom(client, joined) {
   if (!mainRoom?.roomId) return;
   const present = Array.isArray(joined) && joined.includes(mainRoom.roomId);
-  const members = present
-    ? await client.getJoinedRoomMembers(mainRoom.roomId).catch(() => null)
-    : null;
+  const members = present ? await roomMembers(client, mainRoom.roomId) : null;
 
   const { problems, admins } = mainRoom.verify(joined, members, matrix.allowedUsers);
+  if (!present) {
+    mainRoom.unset("the bot is not in it");
+    return;
+  }
   if (!problems.length) return;
 
-  const canTell = present && (matrix.allowedUsers.length === 0 || admins.length > 0);
-  if (!canTell) return;
+  if (matrix.allowedUsers.length && admins.length === 0) return;
   try {
     await client.sendMessage(mainRoom.roomId, htmlMessage(
       ["**Main room check**", "", ...problems.map((p) => `- ${p}`)].join("\n"),
@@ -396,6 +407,57 @@ async function verifyMainRoom(client, joined) {
   } catch (err) {
     LogService.warn("bot", `Could not post the main room check: ${err?.message ?? err}`);
   }
+}
+
+/**
+ * Fill an empty main room from the rooms the bot is in.
+ *
+ * `preferred` is a room just joined, and wins outright if it fits: the invite
+ * is the signal, and deferring to it is what lets an admin move the control
+ * channel by inviting the bot somewhere new. Without one — at startup, or after
+ * the main room was lost — exactly one fitting room is unambiguous and several
+ * are not, the same reasoning that has always applied to guessing at startup.
+ */
+async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
+  if (!mainRoom || mainRoom.roomId) return;
+
+  if (preferred) {
+    const fit = roomFits(await roomMembers(client, preferred), matrix.allowedUsers);
+    if (fit.ok) {
+      if (mainRoom.adopt(preferred, why || "joined a room that fits")) {
+        await announceMainRoom(client, preferred);
+      }
+      return;
+    }
+    LogService.info("bot", `${preferred} is not adopted as the main room: ${fit.why}.`);
+  }
+
+  const joined = await client.getJoinedRooms().catch(() => []);
+  const fits = [];
+  for (const roomId of joined) {
+    if (roomId === preferred) continue; // already tried, and it did not fit
+    if (roomFits(await roomMembers(client, roomId), matrix.allowedUsers).ok) fits.push(roomId);
+  }
+
+  if (fits.length === 1) {
+    if (mainRoom.adopt(fits[0], why || "the only room that fits")) {
+      await announceMainRoom(client, fits[0]);
+    }
+    return;
+  }
+  if (fits.length === 0) {
+    LogService.warn(
+      "bot",
+      "No main room, and none of the rooms this bot is in fits one. Invite it to a room " +
+        "holding only itself and an allowed user, or set MATRIX_MAIN_ROOM.",
+    );
+    return;
+  }
+  LogService.warn(
+    "bot",
+    `No main room, and ${fits.length} rooms would fit (${fits.join(", ")}), so there is no safe ` +
+      "guess. Invite the bot to the room you want, or set MATRIX_MAIN_ROOM.",
+  );
 }
 
 function htmlMessage(markdown) {
@@ -434,17 +496,26 @@ async function main() {
     const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
     LogService.info("bot", `Joined ${roomId} (encrypted=${encrypted}).`);
 
-    // The first room in becomes the control channel. Recorded here rather than
-    // derived at startup, because join order cannot be recovered afterwards —
-    // and so a bot invited after it started picks it up without a restart.
-    //
-    // Adoption is a 0 -> 1 transition, so it takes the count including this
-    // room. A failed lookup leaves it undefined, which declines: not adopting
-    // is the outcome an operator can still fix.
-    const joined = await client.getJoinedRooms().catch(() => undefined);
-    if (mainRoom?.adoptOnJoin(roomId, joined?.length)) {
-      await announceMainRoom(client, roomId);
-      await verifyMainRoom(client, joined ?? [roomId]);
+    // With no main room, a room that fits becomes the control channel here
+    // rather than at startup, so a bot invited after it started needs no
+    // restart — and so an admin can move the control channel by inviting it
+    // somewhere new, without editing anything on the host.
+    await settleMainRoom(client, { preferred: roomId, why: "first room that fits" });
+  });
+
+  // "leave" covers kicked, banned and left alike; the member event tells them
+  // apart. Losing the main room is the case that matters: commands run there
+  // and nowhere else, so a bot holding a pointer to a room it cannot reach goes
+  // silent while looking healthy. Drop it and let another room take over.
+  client.on("room.leave", async (roomId, event) => {
+    const kicked = event?.sender && event.sender !== event.state_key;
+    const by = kicked ? ` (kicked by ${event.sender}` : " (left";
+    const reason = event?.content?.reason ? `: ${event.content.reason})` : ")";
+    LogService.info("bot", `Left ${roomId}${by}${reason}.`);
+
+    if (roomId !== mainRoom?.roomId) return;
+    if (mainRoom.unset(kicked ? "the bot was kicked from it" : "the bot is no longer in it")) {
+      await settleMainRoom(client, { why: "the main room was lost" });
     }
   });
 
@@ -475,9 +546,9 @@ async function main() {
   LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
 
-  const settled = mainRoom.settleOnStartup(joined);
-  if (settled) await announceMainRoom(client, settled);
+  LogService.info("bot", mainRoom.describe());
   await verifyMainRoom(client, joined);
+  await settleMainRoom(client, { why: "the only room that fits at startup" });
 
   // Started after sync so crypto is warm before the first spooled send.
   // The main room is read per send, not captured here, so a room adopted later

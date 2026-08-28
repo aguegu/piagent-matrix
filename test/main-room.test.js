@@ -3,95 +3,116 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MainRoom } from "../src/main-room.js";
+import { MainRoom, roomFits } from "../src/main-room.js";
+
+const ROOM = "!main:example.org";
+const ADMIN = "@agu:example.org";
+const BOT = "@bot:example.org";
+
+describe("what makes a room fit to be the main room", () => {
+  it("accepts the bot alone with an allowed user", () => {
+    assert.equal(roomFits([BOT, ADMIN], [ADMIN]).ok, true);
+  });
+
+  it("rejects a room holding nobody who may command the bot", () => {
+    // This is what makes adoption safe: a stranger cannot hand the bot a
+    // control channel by inviting it somewhere.
+    const fit = roomFits([BOT, "@stranger:example.org"], [ADMIN]);
+    assert.equal(fit.ok, false);
+    assert.match(fit.why, /MATRIX_ALLOWED_USERS/);
+  });
+
+  it("rejects a room that is not private", () => {
+    const fit = roomFits([BOT, ADMIN, "@third:example.org"], [ADMIN]);
+    assert.equal(fit.ok, false);
+    assert.match(fit.why, /3 members/);
+  });
+
+  it("does not ask who the admin is when the allowlist is empty", () => {
+    // Empty means everyone may command it, so the question does not arise.
+    assert.equal(roomFits([BOT, "@anyone:example.org"], []).ok, true);
+  });
+
+  it("rejects a room whose membership could not be read", () => {
+    // Adopting on a failed lookup would pick a room nobody checked.
+    assert.equal(roomFits(null, [ADMIN]).ok, false);
+  });
+});
 
 describe("MainRoom", () => {
   let dir;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "mainroom-")); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
-  it("adopts the first room joined and records it", () => {
+  it("adopts a room and records it", () => {
     const mr = new MainRoom(dir);
-    assert.equal(mr.roomId, "", "nothing until a room is joined");
+    assert.equal(mr.roomId, "", "nothing until a room is adopted");
 
-    assert.equal(mr.adoptOnJoin("!first:example.org", 1), true);
-    assert.equal(mr.roomId, "!first:example.org");
+    assert.equal(mr.adopt(ROOM, "first room that fits"), true);
+    assert.equal(mr.roomId, ROOM);
 
     const saved = JSON.parse(readFileSync(join(dir, "main-room.json"), "utf8"));
-    assert.equal(saved.roomId, "!first:example.org");
-    assert.match(saved.recordedBecause, /first room joined/);
+    assert.equal(saved.roomId, ROOM);
+    assert.match(saved.recordedBecause, /first room that fits/);
   });
 
   it("ignores later rooms once one is established", () => {
     const mr = new MainRoom(dir);
-    mr.adoptOnJoin("!first:example.org", 1);
-    assert.equal(mr.adoptOnJoin("!second:example.org", 2), false);
-    assert.equal(mr.roomId, "!first:example.org");
-  });
-
-  it("adopts only on the 0 -> 1 join, not on whichever room comes next", () => {
-    // A bot already sitting in rooms that lost its record must not hand the
-    // control channel to an arbitrary arrival, or to whoever invited it.
-    const mr = new MainRoom(dir);
-    assert.equal(mr.adoptOnJoin("!third:example.org", 3), false);
-    assert.equal(mr.roomId, "", "nothing adopted");
-    assert.equal(existsSync(join(dir, "main-room.json")), false, "and nothing recorded");
-  });
-
-  it("declines when the joined count is unknown", () => {
-    // getJoinedRooms() failing leaves it undefined. Not adopting is the
-    // outcome an operator can still fix; adopting the wrong room is not.
-    const mr = new MainRoom(dir);
-    assert.equal(mr.adoptOnJoin("!unknown:example.org", undefined), false);
-    assert.equal(mr.roomId, "");
+    mr.adopt(ROOM, "first room that fits");
+    assert.equal(mr.adopt("!second:example.org", "first room that fits"), false);
+    assert.equal(mr.roomId, ROOM);
   });
 
   it("survives a restart", () => {
-    new MainRoom(dir).adoptOnJoin("!kept:example.org", 1);
+    new MainRoom(dir).adopt("!kept:example.org", "first room that fits");
     assert.equal(new MainRoom(dir).roomId, "!kept:example.org", "read back from disk");
   });
 
   it("lets MATRIX_MAIN_ROOM pin a different room than the recorded one", () => {
-    new MainRoom(dir).adoptOnJoin("!recorded:example.org", 1);
+    new MainRoom(dir).adopt("!recorded:example.org", "first room that fits");
 
     const pinned = new MainRoom(dir, "!pinned:example.org");
     assert.equal(pinned.roomId, "!pinned:example.org");
     assert.equal(pinned.isPinned, true);
-    // A pinned room must not be overwritten by whatever is joined next.
-    assert.equal(pinned.adoptOnJoin("!other:example.org", 1), false);
+    assert.equal(pinned.adopt("!other:example.org", "first room that fits"), false);
     assert.equal(pinned.roomId, "!pinned:example.org");
   });
 
-  it("adopts the only joined room at startup for a bot that predates the record", () => {
-    const mr = new MainRoom(dir);
-    // Returns what it adopted, so the caller can announce it in that room.
-    assert.equal(mr.settleOnStartup(["!only:example.org"]), "!only:example.org");
-    assert.equal(mr.roomId, "!only:example.org");
-    assert.ok(existsSync(join(dir, "main-room.json")), "and records it, so it is stable");
-    assert.equal(mr.settleOnStartup(["!only:example.org"]), "", "and does not re-announce on the next start");
+  it("tolerates an unreadable record rather than failing to start", () => {
+    writeFileSync(join(dir, "main-room.json"), "{ not json");
+    assert.equal(new MainRoom(dir).roomId, "");
   });
 
-  it("refuses to guess when several rooms are already joined", () => {
-    const mr = new MainRoom(dir);
-    assert.equal(mr.settleOnStartup(["!a:example.org", "!b:example.org"]), "", "nothing to announce");
-    assert.equal(mr.roomId, "", "no guess: getJoinedRooms has no meaningful order");
-    assert.equal(existsSync(join(dir, "main-room.json")), false, "and nothing is recorded");
-  });
+  describe("dropping a main room that stopped working", () => {
+    it("clears the record and the file, so another room can take over", () => {
+      // Keeping it was the worse failure: commands are refused everywhere else
+      // and unreachable there, so the only fix was editing a file on the host.
+      const mr = new MainRoom(dir);
+      mr.adopt(ROOM, "first room that fits");
 
-  it("stays unset with no rooms, ready for the first invite", () => {
-    const mr = new MainRoom(dir);
-    assert.equal(mr.settleOnStartup([]), "");
-    assert.equal(mr.roomId, "");
-    assert.equal(mr.adoptOnJoin("!later:example.org", 1), true, "a later invite still wins");
+      assert.equal(mr.unset("the bot was kicked from it"), true);
+      assert.equal(mr.roomId, "");
+      assert.equal(existsSync(join(dir, "main-room.json")), false);
+      assert.equal(mr.adopt("!next:example.org", "the main room was lost"), true, "a new room can fill it");
+    });
+
+    it("does not unset a room pinned by MATRIX_MAIN_ROOM", () => {
+      // The record would come back from the environment on the next start, so
+      // clearing it would leave the operator arguing with a file.
+      const pinned = new MainRoom(dir, ROOM);
+      assert.equal(pinned.unset("the bot is not in it"), false);
+      assert.equal(pinned.roomId, ROOM);
+    });
+
+    it("is a no-op when there is nothing to drop", () => {
+      assert.equal(new MainRoom(dir).unset("whatever"), false);
+    });
   });
 
   describe("verifying an established main room", () => {
-    const ROOM = "!main:example.org";
-    const ADMIN = "@agu:example.org";
-    const BOT = "@bot:example.org";
     const settled = () => {
       const mr = new MainRoom(dir);
-      mr.adoptOnJoin(ROOM, 1);
+      mr.adopt(ROOM, "first room that fits");
       return mr;
     };
 
@@ -109,7 +130,6 @@ describe("MainRoom", () => {
       assert.equal(r.present, false);
       assert.equal(r.problems.length, 1);
       assert.match(r.problems[0], /not in its main room/);
-      assert.match(r.problems[0], /record is kept/, "and says a re-invite restores it");
     });
 
     it("names MATRIX_MAIN_ROOM when a pinned room is the one missing", () => {
@@ -118,7 +138,8 @@ describe("MainRoom", () => {
       assert.match(r.problems[0], /MATRIX_MAIN_ROOM/, "a mistyped id is the likelier cause");
     });
 
-    it("reports a control channel with no admin in it", () => {
+    it("warns about a control channel with no admin, but keeps it", () => {
+      // Strict to adopt, lenient to keep: the room still works.
       const r = settled().verify([ROOM], [BOT, "@stranger:example.org"], [ADMIN]);
       assert.equal(r.present, true);
       assert.deepEqual(r.admins, []);
@@ -126,13 +147,7 @@ describe("MainRoom", () => {
       assert.match(r.problems[0], /none of MATRIX_ALLOWED_USERS/);
     });
 
-    it("does not ask who the admin is when the allowlist is empty", () => {
-      // Empty means everyone, so the question does not arise.
-      const r = settled().verify([ROOM], [BOT, "@anyone:example.org"], []);
-      assert.deepEqual(r.problems, []);
-    });
-
-    it("still flags a main room that is not private", () => {
+    it("warns about a main room that is no longer private, but keeps it", () => {
       const r = settled().verify([ROOM], [BOT, ADMIN, "@third:example.org"], [ADMIN]);
       assert.equal(r.problems.length, 1);
       assert.match(r.problems[0], /3 members/);
@@ -154,10 +169,5 @@ describe("MainRoom", () => {
       assert.deepEqual(r.problems, []);
       assert.equal(r.present, false);
     });
-  });
-
-  it("tolerates an unreadable record rather than failing to start", () => {
-    writeFileSync(join(dir, "main-room.json"), "{ not json");
-    assert.equal(new MainRoom(dir).roomId, "");
   });
 });
