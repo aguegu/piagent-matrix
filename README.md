@@ -348,8 +348,29 @@ enough, since a bot still sitting in other rooms will decline to adopt.
 
 The main room is read per send rather than captured at startup, so a bot started
 before it was invited anywhere picks one up as soon as it joins, with no
-restart. It warns if the main room has more than two members, since that
-suggests the invite was not the private admin channel it is meant to be.
+restart.
+
+**It is checked at every start.** A recorded room used to be trusted on sight —
+the bot logged `Main room is !x` and carried on, so one it had been kicked from,
+or a mistyped `MATRIX_MAIN_ROOM`, looked healthy right up until every command
+was refused and outbox drops piled up as `.failed`. Three things are checked:
+
+| Check | Why it matters |
+| --- | --- |
+| The bot is actually in it | Otherwise commands run nowhere: they are refused everywhere else, and the one room that accepts them is unreachable |
+| An allowlisted user is in it | A control channel with nobody allowed to command it |
+| It has no more than two members | It is meant to be the bot and its admin |
+
+A failed check **warns; it never blocks startup and never clears the record.**
+The bot has to stay up, because a kicked bot is fixed by re-inviting it and one
+that refused to start could not accept the invite — and the record is what makes
+that re-invite land back on the same room, so dropping it would trade a
+one-click recovery for a manual one.
+
+The warning goes to the log always, and into the main room only when there is
+someone there to act on it — never to a room the bot is not in, and never to one
+holding no allowed user, since a room of strangers is the last place to announce
+that it is the bot's control channel.
 
 ## Extending the agent
 

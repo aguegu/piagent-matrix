@@ -128,16 +128,71 @@ export class MainRoom {
     return "";
   }
 
-  /** Note when the main room does not look like a private admin channel. */
-  checkMembership(roomId, memberCount) {
-    if (roomId !== this.#roomId || typeof memberCount !== "number") return;
-    if (memberCount > 2) {
-      LogService.warn(
-        "bot",
-        `Main room ${roomId} has ${memberCount} members. It is meant to be the bot's control ` +
-          "channel with its admin; operational output goes here.",
+  /**
+   * Check an established main room against what the server actually says.
+   *
+   * A recorded room used to be trusted on sight: the bot logged "Main room is
+   * X" and carried on, so one it had been kicked from — or a mistyped
+   * MATRIX_MAIN_ROOM — looked healthy right up until every command was refused
+   * and the outbox filled with .failed drops.
+   *
+   * Warnings only. This never throws and never clears the record. The bot has
+   * to stay up, because a kicked bot is fixed by re-inviting it and one that
+   * refused to start could not accept the invite; and the record is what makes
+   * that re-invite land back on the same room, so dropping it would trade a
+   * one-click recovery for a manual one.
+   *
+   * @param {string[]} joined  room ids the bot is in
+   * @param {string[]|null} members  user ids in the main room, null if unknown
+   * @param {string[]} allowedUsers  MATRIX_ALLOWED_USERS; empty means everyone
+   * @returns {{ present: boolean, admins: string[], problems: string[] }}
+   */
+  verify(joined, members, allowedUsers = []) {
+    const roomId = this.#roomId;
+    const out = { present: false, admins: [], problems: [] };
+    if (!roomId) return out;
+
+    out.present = Array.isArray(joined) && joined.includes(roomId);
+    if (!out.present) {
+      out.problems.push(
+        this.isPinned
+          ? `MATRIX_MAIN_ROOM names ${roomId}, which this bot is not in. Check the room id, ` +
+            "or invite the bot to that room."
+          : `The bot is not in its main room ${roomId} — kicked, or it left. Commands run ` +
+            "there and nowhere else, so it will take none until it is back. The record is " +
+            "kept on purpose: re-inviting it to that same room restores it.",
       );
+      // Nothing else is knowable from outside a room.
+      for (const p of out.problems) LogService.warn("bot", p);
+      return out;
     }
+
+    if (Array.isArray(members)) {
+      // With an empty allowlist everyone is an admin, so the question does not
+      // arise — and there is no way to tell the bot's own membership apart
+      // from a user's without asking who the bot is.
+      if (allowedUsers.length) {
+        out.admins = members.filter((m) => allowedUsers.includes(m));
+        if (out.admins.length === 0) {
+          out.problems.push(
+            `Main room ${roomId} holds none of MATRIX_ALLOWED_USERS. Nobody who may run a ` +
+              "command is in the room where commands run.",
+          );
+        }
+      }
+      if (members.length > 2) {
+        out.problems.push(
+          `Main room ${roomId} has ${members.length} members. It is meant to be the bot's ` +
+            "control channel with its admin; operational output goes here.",
+        );
+      }
+    }
+
+    for (const p of out.problems) LogService.warn("bot", p);
+    if (!out.problems.length) {
+      LogService.info("bot", `Main room ${roomId} verified: joined${allowedUsers.length ? `, ${out.admins.length} allowed user(s) present` : ""}.`);
+    }
+    return out;
   }
 
   /** True once a record exists on disk. */

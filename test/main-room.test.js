@@ -85,6 +85,77 @@ describe("MainRoom", () => {
     assert.equal(mr.adoptOnJoin("!later:example.org", 1), true, "a later invite still wins");
   });
 
+  describe("verifying an established main room", () => {
+    const ROOM = "!main:example.org";
+    const ADMIN = "@agu:example.org";
+    const BOT = "@bot:example.org";
+    const settled = () => {
+      const mr = new MainRoom(dir);
+      mr.adoptOnJoin(ROOM, 1);
+      return mr;
+    };
+
+    it("passes a room the bot is in with its admin", () => {
+      const r = settled().verify([ROOM], [BOT, ADMIN], [ADMIN]);
+      assert.deepEqual(r.problems, []);
+      assert.equal(r.present, true);
+      assert.deepEqual(r.admins, [ADMIN]);
+    });
+
+    it("reports a main room the bot is not in", () => {
+      // Used to log "Main room is !main" and carry on, so a kicked bot looked
+      // healthy until every command was refused.
+      const r = settled().verify(["!elsewhere:example.org"], null, [ADMIN]);
+      assert.equal(r.present, false);
+      assert.equal(r.problems.length, 1);
+      assert.match(r.problems[0], /not in its main room/);
+      assert.match(r.problems[0], /record is kept/, "and says a re-invite restores it");
+    });
+
+    it("names MATRIX_MAIN_ROOM when a pinned room is the one missing", () => {
+      const pinned = new MainRoom(dir, "!typo:example.org");
+      const r = pinned.verify([ROOM], null, [ADMIN]);
+      assert.match(r.problems[0], /MATRIX_MAIN_ROOM/, "a mistyped id is the likelier cause");
+    });
+
+    it("reports a control channel with no admin in it", () => {
+      const r = settled().verify([ROOM], [BOT, "@stranger:example.org"], [ADMIN]);
+      assert.equal(r.present, true);
+      assert.deepEqual(r.admins, []);
+      assert.equal(r.problems.length, 1);
+      assert.match(r.problems[0], /none of MATRIX_ALLOWED_USERS/);
+    });
+
+    it("does not ask who the admin is when the allowlist is empty", () => {
+      // Empty means everyone, so the question does not arise.
+      const r = settled().verify([ROOM], [BOT, "@anyone:example.org"], []);
+      assert.deepEqual(r.problems, []);
+    });
+
+    it("still flags a main room that is not private", () => {
+      const r = settled().verify([ROOM], [BOT, ADMIN, "@third:example.org"], [ADMIN]);
+      assert.equal(r.problems.length, 1);
+      assert.match(r.problems[0], /3 members/);
+    });
+
+    it("reports both problems at once", () => {
+      const r = settled().verify([ROOM], [BOT, "@a:example.org", "@b:example.org"], [ADMIN]);
+      assert.equal(r.problems.length, 2);
+    });
+
+    it("checks what it can when the member list is unavailable", () => {
+      const r = settled().verify([ROOM], null, [ADMIN]);
+      assert.equal(r.present, true);
+      assert.deepEqual(r.problems, [], "being in the room is all that could be established");
+    });
+
+    it("says nothing when no main room is established", () => {
+      const r = new MainRoom(dir).verify([ROOM], [BOT, ADMIN], [ADMIN]);
+      assert.deepEqual(r.problems, []);
+      assert.equal(r.present, false);
+    });
+  });
+
   it("tolerates an unreadable record rather than failing to start", () => {
     writeFileSync(join(dir, "main-room.json"), "{ not json");
     assert.equal(new MainRoom(dir).roomId, "");

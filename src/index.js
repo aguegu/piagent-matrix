@@ -368,6 +368,36 @@ async function announceMainRoom(client, roomId) {
   }
 }
 
+/**
+ * Check the main room and report anything wrong with it.
+ *
+ * See MainRoom#verify for why a failure warns rather than blocking startup.
+ * The chat notice goes out only where someone can act on it: not to a room the
+ * bot is not in, obviously, and not to one holding no allowed user — a room of
+ * strangers is the last place to announce that it is the bot's control channel.
+ * The log always gets everything.
+ */
+async function verifyMainRoom(client, joined) {
+  if (!mainRoom?.roomId) return;
+  const present = Array.isArray(joined) && joined.includes(mainRoom.roomId);
+  const members = present
+    ? await client.getJoinedRoomMembers(mainRoom.roomId).catch(() => null)
+    : null;
+
+  const { problems, admins } = mainRoom.verify(joined, members, matrix.allowedUsers);
+  if (!problems.length) return;
+
+  const canTell = present && (matrix.allowedUsers.length === 0 || admins.length > 0);
+  if (!canTell) return;
+  try {
+    await client.sendMessage(mainRoom.roomId, htmlMessage(
+      ["**Main room check**", "", ...problems.map((p) => `- ${p}`)].join("\n"),
+    ));
+  } catch (err) {
+    LogService.warn("bot", `Could not post the main room check: ${err?.message ?? err}`);
+  }
+}
+
 function htmlMessage(markdown) {
   return {
     msgtype: "m.text",
@@ -414,8 +444,7 @@ async function main() {
     const joined = await client.getJoinedRooms().catch(() => undefined);
     if (mainRoom?.adoptOnJoin(roomId, joined?.length)) {
       await announceMainRoom(client, roomId);
-      const members = await client.getJoinedRoomMembers(roomId).catch(() => null);
-      mainRoom.checkMembership(roomId, members?.length);
+      await verifyMainRoom(client, joined ?? [roomId]);
     }
   });
 
@@ -448,6 +477,7 @@ async function main() {
 
   const settled = mainRoom.settleOnStartup(joined);
   if (settled) await announceMainRoom(client, settled);
+  await verifyMainRoom(client, joined);
 
   // Started after sync so crypto is warm before the first spooled send.
   // The main room is read per send, not captured here, so a room adopted later
