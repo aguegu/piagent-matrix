@@ -344,7 +344,7 @@ Fixing it means signing the device with the account's self-signing key, which
 lives encrypted in secret storage (4S). `matrix-bot-sdk` and the rust bindings
 under it have **no secret-storage support at all**, so the bot cannot do what
 Element does. `matrix-js-sdk` can, so it is a `devDependency` used only by
-`scripts/cross-sign.mjs`. Nothing in `src/` imports it.
+`scripts/cross-sign.js`. Nothing in `src/` imports it.
 
 ```sh
 npm run cross-sign        # defaults to the device in data/token.json
@@ -378,7 +378,7 @@ src/agent.js            per-room pi sessions, serialization, reply rendering
 src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
 src/status.js           typing indicator (+ an unused edit-in-place helper)
-scripts/cross-sign.mjs  provisioning, matrix-js-sdk only
+scripts/cross-sign.js  provisioning, matrix-js-sdk only
 docs/agent-handoff.md   pi API notes and past failure modes
 test/                   node:test suites
 data/                   the bot's identity          (gitignored)
