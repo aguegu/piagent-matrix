@@ -255,3 +255,25 @@ describe("slash commands survive the room briefing", () => {
     assert.ok(second.endsWith("hello"));
   });
 });
+
+describe("dropping a room the bot has left", () => {
+  it("disposes the session and forgets the briefing", async () => {
+    // Sessions are cached for the process lifetime, so a room walked out of
+    // would otherwise hold one until shutdown.
+    const session = makeFakeSession();
+    let disposed = false;
+    session.dispose = () => { disposed = true; };
+    const mgr = makeManager(session);
+    const client = makeFakeClient();
+    await mgr.handleMessage({ roomId: "!gone:example.org", text: "hi", sender: "@a:example.org", client });
+
+    assert.equal(await mgr.disposeRoom("!gone:example.org"), true);
+    assert.equal(disposed, true);
+    assert.equal(mgr.sessions.has("!gone:example.org"), false);
+    assert.equal(mgr.briefed.has("!gone:example.org"), false, "a re-invite starts briefed afresh");
+  });
+
+  it("is a no-op for a room that never had one", async () => {
+    assert.equal(await makeManager(makeFakeSession()).disposeRoom("!never:example.org"), false);
+  });
+});

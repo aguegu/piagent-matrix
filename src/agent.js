@@ -530,6 +530,29 @@ export class AgentManager {
   }
 
   /** Stop tracking a room (e.g., on shutdown). */
+  /**
+   * Drop one room's session, for a room the bot is leaving.
+   *
+   * Sessions are cached for the process lifetime, so a room the bot has walked
+   * out of would otherwise hold one until shutdown. Nothing is lost that was
+   * not already lost: with sessionDir set the conversation is on disk and
+   * resumes if the bot is invited back.
+   *
+   * @returns {Promise<boolean>} true if there was a session to drop
+   */
+  async disposeRoom(roomId) {
+    const pending = this.sessions.get(roomId);
+    this.briefed.delete(roomId);
+    if (!pending) return false;
+    this.sessions.delete(roomId);
+    try {
+      (await pending).dispose();
+    } catch {
+      /* never finished being created, or already gone */
+    }
+    return true;
+  }
+
   async dispose() {
     for (const p of this.sessions.values()) {
       try {

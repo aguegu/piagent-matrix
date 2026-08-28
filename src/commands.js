@@ -27,6 +27,7 @@ export const COMMANDS = {
   info: { what: "Show the model and thinking level in use", everywhere: true },
   verify: { what: "Run the `verify` prompt template from PI_AGENT_DIR/prompts" },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
+  rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>`, or `.rooms leave all`" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },
   thinking: { what: "Show the thinking level, or set it: `.thinking <level>`" },
   // advertised as .help — /help is Element's own

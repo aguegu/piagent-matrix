@@ -14,6 +14,7 @@ checked rather than trusted.
 ### New Features
 
 * **Commands** (`src/commands.js`): `.info` shows the model and thinking level, `.verify` runs the `verify` prompt template, `.reload` is pi's `/reload` applied to every live session, `.model` and `.thinking` report or change the agent's settings, `.help` lists what is installed. A short allowlist rather than a passthrough — unrecognised slash text stays an ordinary prompt, so a message beginning with a path still reaches the agent. pi's `!` bash escape is not offered
+* `.rooms` lists the rooms the bot is in — name, id, member count, and which one is the main room. `.rooms leave <roomId>` walks it out of one, straight away, since naming an id copied from the listing is deliberate on its own. `.rooms leave all` does every room but the main one and asks first, listing what would go and waiting for `.rooms leave all confirm`; leaving is visible to everyone in those rooms and takes a fresh invite to undo. The main room cannot be left on command — kicking the bot from it is the gesture that re-elects. Each room's cached pi session is dropped as the bot goes
 * Advertised with a leading dot. Element intercepts `/` for its own commands, so `/help` opens Element's help and never reaches the bot; `/` is still accepted for clients that pass it through
 * `.model` and `.thinking` apply to every live session and to any created later, and record the choice under `DATA_DIR/agent.json`, so changing either no longer means editing `.env.local` and restarting. Bare, they report the current setting and list what is on offer, since a room cannot present pi's selector UI
 * **Commands belong to the main room.** Each one either reconfigures the bot for every room — one agent config backs them all — or hands a chat message the agent's own reach. A working room may hold people who are not the bot's admin, so it gets `.info` and nothing else. Anything else there is refused flatly, with no reason and never the main room's id, and `.help` does not run there either, so nothing outside the main room hints that one exists. With no main room established everything is allowed, rather than leaving the bot with one usable command
@@ -30,7 +31,7 @@ checked rather than trusted.
 
 ### Tests
 
-* 66 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
+* 69 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, what makes a room fit to be adopted, dropping a main room that stopped working, and each verification outcome
 
 ## 0.2.0 (2026-08-28)
 

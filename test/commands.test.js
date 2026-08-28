@@ -29,6 +29,17 @@ describe("command parsing", () => {
     }
   });
 
+  it("keeps a subcommand and its target as arguments", () => {
+    // `.rooms leave !x:y` is one command with two words of argument, not a
+    // command called "rooms leave".
+    assert.deepEqual(parseCommand(".rooms leave !abc:example.org"), {
+      name: "rooms",
+      args: "leave !abc:example.org",
+    });
+    assert.deepEqual(parseCommand(".rooms leave all confirm"), { name: "rooms", args: "leave all confirm" });
+    assert.deepEqual(parseCommand(".rooms"), { name: "rooms", args: "" });
+  });
+
   it("does not eat a message that merely begins with a slash", () => {
     assert.equal(parseCommand("/home/agu/notes.md — have a look"), null);
     assert.equal(parseCommand("/verifying something by hand"), null, "needs a word boundary");

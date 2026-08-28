@@ -428,6 +428,7 @@ belong to the main room** — see below.
 | `.info` | any room | Shows the model and thinking level in use |
 | `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
+| `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one, `.rooms leave all` leaves all but the main room |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
 | `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
 | `.help` | main room | Lists the commands, and the prompt templates and skills installed |
