@@ -2,22 +2,31 @@
 
 ## 0.2.1 (in progress)
 
+A command surface for the bot, and a main room that announces itself and is
+checked rather than trusted.
+
+### Breaking Changes
+
+* `PI_MODEL` and `PI_THINKING_LEVEL` are gone: removed from `.env` and no longer read from the environment at all, along with the `PI_PROVIDER` tie-break for a bare model id. Both are runtime settings now — say `.model <provider/id>` and `.thinking <level>` once in the main room and the choice is recorded in `DATA_DIR/agent.json`. A bot that has never been told starts on the first available model at thinking level `low`. Reading them was worse than redundant: an interactive `pi` run exports `PI_MODEL` and `PI_PROVIDER` into the shell, so an operator who had run pi in that terminal handed the bot a model without knowing
+* Adopting the main room is now a 0 → 1 transition only — the bot takes its control channel from the room it is invited to while it is in no others. Any join used to adopt as long as nothing was recorded, so a bot that had lost `data/main-room.json` handed the control channel to whichever room it next joined: an arbitrary room, chosen by whoever sent that invite. Re-electing therefore needs the bot removed from its other rooms as well as the record deleted; `MATRIX_MAIN_ROOM` still pins one outright
+
 ### New Features
 
-* Commands (`src/commands.js`): `.verify` runs the `verify` prompt template, `.reload` is pi's `/reload` applied to every live session, `.help` lists what is installed. A short allowlist rather than a passthrough — unrecognised slash text stays an ordinary prompt, so a message beginning with a path still reaches the agent
-* Advertised with a leading dot. Element intercepts `/` for its own commands, so `/help` never reaches the bot; `/` is still accepted for clients that pass it through
-* `.model` and `.thinking` report where the agent is and what else is on offer, or change it. The choice applies to every live session and is recorded under `DATA_DIR/agent.json`, so it survives a restart — `PI_MODEL` and `PI_THINKING_LEVEL` are demoted to what a bot that has never been told starts with. Changing either no longer means editing `.env.local` and restarting
-* `PI_MODEL` and `PI_THINKING_LEVEL` are gone from `.env` and no longer read from the environment at all, along with the `PI_PROVIDER` tie-break for a bare id. Both are runtime settings now, so an env var that a recorded choice overrides is not a knob — and an interactive `pi` run exports `PI_MODEL`/`PI_PROVIDER` into the shell, which let a stray export decide the bot's model invisibly. A bot that has never been told starts on the first available model at thinking level `low`
-* **Commands belong to the main room.** Each one either reconfigures the bot for every room (`.model`, `.thinking`, `.reload`) or hands a chat message the agent's own reach (`.verify`), so the bot's control channel is where they go
-* `.info` is the exception, and the whole command surface of a working room: it shows the model and thinking level and changes nothing. Anything else there gets a flat `\`.model\` is not available here.` — no reason, and never the main room's id. `.help` does not run outside the main room either, so nothing there hints a control channel exists. With no main room established, everything is allowed rather than leaving the bot with one usable command
-
-* The bot announces adoption in the room it just took as its control channel, instead of recording it to disk and saying nothing. The room that gets the powers is told it has them
-* The main room is verified at every start: the bot is in it, an allowlisted user is in it, and it has no more than two members. A recorded room was previously trusted on sight, so one the bot had been kicked from — or a mistyped `MATRIX_MAIN_ROOM` — looked healthy until every command was refused and outbox drops piled up as `.failed`. A failed check warns and never blocks startup or clears the record: a kicked bot is fixed by re-inviting it, one that refused to start could not accept the invite, and the record is what makes the re-invite land back on the same room. The notice reaches the main room only when an allowed user is in it, and the log always
-* Adoption is now a 0 → 1 transition only: the bot takes its control channel from the room it is invited to while it is in no others. Previously any join adopted as long as nothing was recorded, so a bot that had lost `data/main-room.json` handed the control channel to whichever room it next joined — an arbitrary room, chosen by whoever sent that invite. An unknown room count declines too
+* **Commands** (`src/commands.js`): `.info` shows the model and thinking level, `.verify` runs the `verify` prompt template, `.reload` is pi's `/reload` applied to every live session, `.model` and `.thinking` report or change the agent's settings, `.help` lists what is installed. A short allowlist rather than a passthrough — unrecognised slash text stays an ordinary prompt, so a message beginning with a path still reaches the agent. pi's `!` bash escape is not offered
+* Advertised with a leading dot. Element intercepts `/` for its own commands, so `/help` opens Element's help and never reaches the bot; `/` is still accepted for clients that pass it through
+* `.model` and `.thinking` apply to every live session and to any created later, and record the choice under `DATA_DIR/agent.json`, so changing either no longer means editing `.env.local` and restarting. Bare, they report the current setting and list what is on offer, since a room cannot present pi's selector UI
+* **Commands belong to the main room.** Each one either reconfigures the bot for every room — one agent config backs them all — or hands a chat message the agent's own reach. A working room may hold people who are not the bot's admin, so it gets `.info` and nothing else. Anything else there is refused flatly, with no reason and never the main room's id, and `.help` does not run there either, so nothing outside the main room hints that one exists. With no main room established everything is allowed, rather than leaving the bot with one usable command
+* The bot announces adoption in the room it has just taken as its control channel, saying what that means. Adoption was otherwise invisible — it happens on join and goes straight to disk, so the only way to learn which room the bot took commands from was to read the log
+* The main room is verified at every start: the bot is in it, an allowlisted user is in it, and it holds no more than two members. A recorded room was trusted on sight, so one the bot had been kicked from — or a mistyped `MATRIX_MAIN_ROOM` — looked healthy right up until every command was refused and outbox drops piled up as `.failed`. A failed check warns and never blocks startup or clears the record: a kicked bot is fixed by re-inviting it, one that refused to start could not accept the invite, and the record is what makes the re-invite land back on the same room. The notice reaches the main room only where someone can act on it, and the log always gets everything
+* `reload()` calls pi's `AgentSession.reload()` on each live session rather than disposing them, matching the TUI: resources are re-read, sessions and their history survive
 
 ### Fixes
 
 * The room briefing no longer prefixes context onto a message starting with `/`. pi expands prompt templates and skill commands only when the text starts with a slash, so the briefing silently turned the first `/verify` of every session into ordinary text. Such a turn now stays unbriefed and the context goes out with the next ordinary message
+
+### Tests
+
+* 66 tests, up from 33: command parsing and which room may run each one, the recorded model and thinking level and their precedence over startup defaults, main-room adoption on the 0 → 1 join, and each verification outcome
 
 ## 0.2.0 (2026-08-28)
 
