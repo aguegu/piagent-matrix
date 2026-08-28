@@ -137,6 +137,12 @@ The bot starts on the first available. There is nothing to configure: say
 **`.model <provider/id>`** in the main room to pick another, and the choice is
 recorded under `DATA_DIR/agent.json` so it survives restarts.
 
+**`/login` is the only step in the TUI the bot depends on.** pi's own `/model`
+does not carry over — it records `defaultProvider` and `defaultModel` in
+`data/pi/settings.json`, which the bot never reads, since `ModelRuntime` is
+given `auth.json` and `models-store.json` and nothing else. Running it there is
+harmless, just not what the bot picks up.
+
 ### 5. First start
 
 ```sh
