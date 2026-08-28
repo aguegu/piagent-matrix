@@ -29,6 +29,7 @@ import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, roomFits } from "./main-room.js";
+import { installPrompts } from "./prompts.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -575,6 +576,13 @@ async function main() {
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
   mainRoom = new MainRoom(resolve(storagePaths.dataDir));
+  // Templates are source, kept in prompts/ and installed here with this host's
+  // paths substituted, rather than living unversioned under DATA_DIR.
+  installPrompts(resolve(config.get("agent.agentDir")), {
+    DATA_DIR: resolve(storagePaths.dataDir),
+    BOT_CWD: config.get("agent.cwd"),
+    OUTBOX_DIR: resolve(config.get("outbox.dir")),
+  });
   // The agent's working directory must exist before pi opens a session in it.
   mkdirSync(config.get("agent.cwd"), { recursive: true });
 
