@@ -11,6 +11,9 @@
 * **Commands belong to the main room.** Each one either reconfigures the bot for every room (`.model`, `.thinking`, `.reload`) or hands a chat message the agent's own reach (`.verify`), so the bot's control channel is where they go
 * `.info` is the exception, and the whole command surface of a working room: it shows the model and thinking level and changes nothing. Anything else there gets a flat `\`.model\` is not available here.` — no reason, and never the main room's id. `.help` does not run outside the main room either, so nothing there hints a control channel exists. With no main room established, everything is allowed rather than leaving the bot with one usable command
 
+* The bot announces adoption in the room it just took as its control channel, instead of recording it to disk and saying nothing. The room that gets the powers is told it has them
+* Adoption is now a 0 → 1 transition only: the bot takes its control channel from the room it is invited to while it is in no others. Previously any join adopted as long as nothing was recorded, so a bot that had lost `data/main-room.json` handed the control channel to whichever room it next joined — an arbitrary room, chosen by whoever sent that invite. An unknown room count declines too
+
 ### Fixes
 
 * The room briefing no longer prefixes context onto a message starting with `/`. pi expands prompt templates and skill commands only when the text starts with a slash, so the briefing silently turned the first `/verify` of every session into ordinary text. Such a turn now stays unbriefed and the context goes out with the next ordinary message

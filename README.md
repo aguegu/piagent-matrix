@@ -167,7 +167,10 @@ once per fresh login — rare, since the crypto store persists.
 
 ### 7. Invite and test
 
-Invite the bot from an allowlisted account; it autojoins. Send it a message.
+Invite the bot from an allowlisted account; it autojoins. Since this is its
+first room, it adopts it as the [main room](#the-main-room) and says so — that
+message is the confirmation the whole setup worked. Send it a message, or
+`.help` for what it answers to.
 
 ## Troubleshooting a fresh install
 
@@ -316,15 +319,32 @@ the main room, written to `data/main-room.json`. That has to be observed at join
 time — `getJoinedRooms()` has no meaningful order, so "first" cannot be
 recovered afterwards.
 
+**Adoption is a 0 → 1 transition, and only that.** The bot takes its control
+channel from the room it is invited to *while it is in no others*. It does not
+take it from whichever room it happens to join next: a bot already sitting in
+rooms that has lost its record adopts nothing, because the next arrival is an
+arbitrary room and adopting it would hand the control channel to whoever sent
+that invite, quietly. An unknown room count declines too — not adopting is the
+outcome an operator can still fix.
+
 | Situation | What happens |
 | --- | --- |
-| First invite | That room is adopted and recorded |
+| Invited while in no other room | Adopted and recorded |
+| Invited while already in rooms, none recorded | Not adopted; warns. Set `MATRIX_MAIN_ROOM` or write the id into `data/main-room.json` |
 | Existing bot, one joined room | Adopted at startup and recorded |
-| Existing bot, several joined rooms | Refuses to guess; warns. Set `MATRIX_MAIN_ROOM` or write the id into `data/main-room.json` |
+| Existing bot, several joined rooms | Refuses to guess; warns |
 | `MATRIX_MAIN_ROOM` set | Pins that room; nothing observed overrides it |
 
+**The bot says so when it adopts.** It posts in the room it just took as its
+control channel — commands run here, later output arrives here, other rooms get
+`.info` only. Otherwise adoption is invisible: it happens on join and goes
+straight to disk, and the room that gets the powers should be told it has them.
+A failed notice is logged, not thrown; the adoption still stands.
+
 To re-elect — the first invite was a scratch room, say — delete
-`data/main-room.json` and re-invite, or set `MATRIX_MAIN_ROOM`.
+`data/main-room.json`, remove the bot from every room, and re-invite it to the
+one you want; or set `MATRIX_MAIN_ROOM`. Deleting the record alone is no longer
+enough, since a bot still sitting in other rooms will decline to adopt.
 
 The main room is read per send rather than captured at startup, so a bot started
 before it was invited anywhere picks one up as soon as it joins, with no

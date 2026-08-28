@@ -340,6 +340,34 @@ function listNames(dir) {
   }
 }
 
+/**
+ * Tell a room it has just become the control channel.
+ *
+ * Adoption is otherwise invisible: it happens on join and is written to disk,
+ * so without this the only way to learn which room the bot takes commands from
+ * is to read the log. The room that gets the powers should be told it has them.
+ *
+ * Failure is logged, not thrown — a bot that cannot post the notice has still
+ * joined and still adopted, and an exception here would escape into the join
+ * handler's unhandled rejection.
+ */
+async function announceMainRoom(client, roomId) {
+  const note = [
+    "**Adopted this as my main room.**",
+    "",
+    "It is my control channel: commands run here, and anything I am asked to post later arrives here.",
+    "Other rooms get `.info` and nothing else.",
+    "",
+    "Say `.help` for what I answer to.",
+  ].join("\n");
+  try {
+    await client.sendMessage(roomId, htmlMessage(note));
+    LogService.info("bot", `Announced the main room in ${roomId}.`);
+  } catch (err) {
+    LogService.warn("bot", `Could not announce the main room in ${roomId}: ${err?.message ?? err}`);
+  }
+}
+
 function htmlMessage(markdown) {
   return {
     msgtype: "m.text",
@@ -376,10 +404,16 @@ async function main() {
     const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
     LogService.info("bot", `Joined ${roomId} (encrypted=${encrypted}).`);
 
-    // First room in becomes the control channel. Recorded here rather than
+    // The first room in becomes the control channel. Recorded here rather than
     // derived at startup, because join order cannot be recovered afterwards —
     // and so a bot invited after it started picks it up without a restart.
-    if (mainRoom?.adopt(roomId, "first room joined")) {
+    //
+    // Adoption is a 0 -> 1 transition, so it takes the count including this
+    // room. A failed lookup leaves it undefined, which declines: not adopting
+    // is the outcome an operator can still fix.
+    const joined = await client.getJoinedRooms().catch(() => undefined);
+    if (mainRoom?.adoptOnJoin(roomId, joined?.length)) {
+      await announceMainRoom(client, roomId);
       const members = await client.getJoinedRoomMembers(roomId).catch(() => null);
       mainRoom.checkMembership(roomId, members?.length);
     }
@@ -412,7 +446,8 @@ async function main() {
   LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
 
-  mainRoom.settleOnStartup(joined);
+  const settled = mainRoom.settleOnStartup(joined);
+  if (settled) await announceMainRoom(client, settled);
 
   // Started after sync so crypto is warm before the first spooled send.
   // The main room is read per send, not captured here, so a room adopted later
