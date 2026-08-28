@@ -133,8 +133,9 @@ node -e "import('@earendil-works/pi-coding-agent').then(async m=>{
 })"
 ```
 
-Set `PI_MODEL` in `.env.local` to pin one, e.g. `anthropic/claude-opus-4-5`.
-Left empty, the bot uses the first available.
+Left empty, the bot uses the first available. `PI_MODEL` in `.env.local` pins a
+different one for a fresh install, e.g. `anthropic/claude-opus-4-5` — but from
+then on it is easier to say **`.model`** in the main room, which records the choice.
 
 ### 5. First start
 
@@ -240,8 +241,8 @@ bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`
 | `MATRIX_RECOVERY_KEY` | no | Only for `npm run cross-sign`; the bot never reads it |
 | `DATA_DIR` | no | Identity and crypto store. Default `./data` |
 | `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
-| `PI_MODEL` | no | `provider/model-id`, or a bare id. Default: first available |
-| `PI_THINKING_LEVEL` | no | `off`…`max`. Default `low` |
+| `PI_MODEL` | no | First-run default only; `.model` records a choice that wins. `provider/model-id` or a bare id. Default: first available |
+| `PI_THINKING_LEVEL` | no | First-run default only; `.thinking` records a choice that wins. `off`…`max`. Default `low` |
 | `PI_AGENT_DIR` | no | pi's auth and settings. Default `${DATA_DIR}/pi` |
 | `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `/tmp/piagent-workspace`; the bot refuses to start if unset |
 | `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
@@ -341,9 +342,10 @@ So you extend the bot exactly as you would extend pi, pointed at that directory.
 PI_CODING_AGENT_DIR=./data/pi npx pi install npm:pi-web-access
 ```
 
-That appends to `packages` in `data/pi/settings.json`. **Restart the bot** —
-sessions are created once per room and cached for the process lifetime, so a
-running bot keeps the extension set it started with.
+That appends to `packages` in `data/pi/settings.json`. Then send **`.reload`**
+in the main room — sessions are created once per room and cached for the process
+lifetime, so a running bot otherwise keeps the extension set it started with.
+Restarting works too.
 
 On startup the bot logs what loaded, and says so when one fails:
 
@@ -355,7 +357,7 @@ On startup the bot logs what loaded, and says so when one fails:
 ### Skills
 
 Drop a skill in `data/pi/skills/` and it is available as `/skill:<name>` in
-every room. Same restart rule.
+every room, once you `.reload` (or restart).
 
 ### Context files — the closest thing to memory
 
@@ -374,6 +376,72 @@ to keep context there.
 
 This is distinct from conversation history, which `SESSION_DIR` persists per
 room. Context files are instructions; sessions are what was said.
+
+## Commands
+
+A short allowlist, recognised before the agent sees the message. **Commands
+belong to the main room** — see below.
+
+| Command | Where | What it does |
+| --- | --- | --- |
+| `.info` | any room | Shows the model and thinking level in use |
+| `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
+| `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
+| `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
+| `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
+| `.help` | main room | Lists the commands, and the prompt templates and skills installed |
+
+**Use a leading dot, not a slash.** Element intercepts `/` for its own commands,
+so `/help` opens Element's help and never reaches the bot. A leading `/` is
+still accepted for clients that pass it through, but `.` is the reliable form.
+
+### The main room holds the controls
+
+Every command but `.info` either reconfigures the bot for *all* rooms
+(`.model`, `.thinking`, `.reload`) or hands a chat message the agent's own reach
+(`.verify`). One agent config backs every room, so a switch made in a working
+room would reconfigure the others without their knowing, and only the room that
+did it would see the confirmation. That belongs in the bot's control channel.
+
+A working room may hold people who are not the bot's admin, so it gets `.info`
+and nothing else. Anything else there is answered with a flat
+`` `.model` is not available here. `` — no reason, and **never the main room's
+id**. Nothing outside the main room hints that one exists: `.help` does not run
+there either, so the listing above is never shown to a room that cannot use it.
+
+If no main room is established, everything is allowed rather than leaving the
+bot with one usable command.
+
+### What each one does
+
+`.info` is the whole command surface of a working room: two lines, the model and
+the thinking level. It reads; it changes nothing. Deliberately no caveat about
+whether the room has a live session — sessions are in-memory, so a room chatted
+in for days would report none after a restart, and the values are the same
+either way.
+
+`.verify` is not special-cased: the bot hands `/verify` to pi, which expands the
+template and runs the agent, so the reply arrives like any other. Any prompt
+template you add to `PI_AGENT_DIR/prompts` works the same way once its name is
+added to `COMMANDS` in `src/commands.js`.
+
+`.reload` calls `AgentSession.reload()` on every live session, not just the room
+that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so
+reloading one room would leave the rest stale. Sessions and their history
+survive; only the resources are re-read. It is the restart that the *Extending
+the agent* section would otherwise require.
+
+`.model` and `.thinking` exist so you do not have to edit `.env.local` and
+restart to change either. Bare, they report where you are and list what is on
+offer — a room cannot present pi's selector UI. With an argument, they apply the
+change to every live session and **record it under `DATA_DIR/agent.json`**, so
+it survives a restart. That recording is the point: `PI_MODEL` and
+`PI_THINKING_LEVEL` are only what a bot that has never been told starts with.
+
+Anything unrecognised is an ordinary prompt. `/login` and `/compact`
+are deliberately **not** wired up: they need a back-and-forth a room cannot give,
+or hand a chat message more reach than it should have. pi's TUI also treats `!`
+as "run bash", which is not offered here for the same reason.
 
 ## Scripts
 

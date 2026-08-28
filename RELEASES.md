@@ -2,6 +2,18 @@
 
 ## 0.2.1 (in progress)
 
+### New Features
+
+* Commands (`src/commands.js`): `.verify` runs the `verify` prompt template, `.reload` is pi's `/reload` applied to every live session, `.help` lists what is installed. A short allowlist rather than a passthrough — unrecognised slash text stays an ordinary prompt, so a message beginning with a path still reaches the agent
+* Advertised with a leading dot. Element intercepts `/` for its own commands, so `/help` never reaches the bot; `/` is still accepted for clients that pass it through
+* `.model` and `.thinking` report where the agent is and what else is on offer, or change it. The choice applies to every live session and is recorded under `DATA_DIR/agent.json`, so it survives a restart — `PI_MODEL` and `PI_THINKING_LEVEL` are demoted to what a bot that has never been told starts with. Changing either no longer means editing `.env.local` and restarting
+* **Commands belong to the main room.** Each one either reconfigures the bot for every room (`.model`, `.thinking`, `.reload`) or hands a chat message the agent's own reach (`.verify`), so the bot's control channel is where they go
+* `.info` is the exception, and the whole command surface of a working room: it shows the model and thinking level and changes nothing. Anything else there gets a flat `\`.model\` is not available here.` — no reason, and never the main room's id. `.help` does not run outside the main room either, so nothing there hints a control channel exists. With no main room established, everything is allowed rather than leaving the bot with one usable command
+
+### Fixes
+
+* The room briefing no longer prefixes context onto a message starting with `/`. pi expands prompt templates and skill commands only when the text starts with a slash, so the briefing silently turned the first `/verify` of every session into ordinary text. Such a turn now stays unbriefed and the context goes out with the next ordinary message
+
 ## 0.2.0 (2026-08-28)
 
 Hardening pass over the agent path, plus the plumbing needed to run the bot

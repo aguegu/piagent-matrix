@@ -9,8 +9,8 @@
 // (see ./agent.js). The reply streams back into the room via LiveMessage
 // (edit-in-place, with the encrypted-room dance baked in — see ./status.js).
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import config from "config";
 import {
   AutojoinRoomsMixin,
@@ -24,8 +24,10 @@ import {
 } from "matrix-bot-sdk";
 import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
+import { renderMarkdown } from "./markdown.js";
 import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
+import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom } from "./main-room.js";
 
 const matrix = config.get("matrix");
@@ -205,10 +207,146 @@ async function handleRoomMessage(client, roomId, event) {
   // even if the reply takes a while.
   await client.sendReadReceipt(roomId, event.event_id).catch(() => {});
 
+  // A short allowlist of bot commands, checked before the agent sees anything.
+  // Unrecognised slash text falls through as an ordinary prompt, so a message
+  // that merely starts with a slash — a path, say — still reaches the agent.
+  const command = parseCommand(body);
+
   await withTyping(client, roomId, async () => {
     const agent = await getAgent();
+    if (command) return runCommand(command, { agent, client, roomId, sender: event.sender });
     await agent.handleMessage({ roomId, text: body, sender: event.sender, client });
   });
+}
+
+/** Handle one recognised bot command. */
+async function runCommand(command, { agent, client, roomId, sender }) {
+  LogService.info("bot", `command /${command.name} from ${sender} in ${roomId}`);
+
+  // Commands belong to the main room; a working room gets `.info` only. The
+  // refusal says nothing about why, and never names the main room — a working
+  // room may hold people who are not the bot's admin.
+  if (!mayCommand(command.name, roomId, mainRoom?.roomId)) {
+    await client.sendMessage(roomId, htmlMessage(`\`.${command.name}\` is not available here.`));
+    return;
+  }
+
+  if (command.name === "info") {
+    // Two lines, no caveats. Whether this room has a live session yet is an
+    // implementation detail — sessions are in-memory, so a room chatted in for
+    // days reports none after a restart, which reads as "I do not remember
+    // you" when the history is on disk waiting to be resumed. The values are
+    // the same either way. `.model` and `.thinking` keep the distinction,
+    // where an admin can act on it.
+    const [model, thinking] = await Promise.all([
+      agent.describeModel(roomId),
+      agent.describeThinking(roomId),
+    ]);
+    await client.sendMessage(roomId, htmlMessage(
+      `Model: \`${model.current}\`\nThinking: \`${thinking.current}\``,
+    ));
+    return;
+  }
+
+  if (command.name === "help") {
+    const dir = resolve(config.get("agent.agentDir"));
+    await client.sendMessage(roomId, htmlMessage(helpText({
+      prompts: listNames(join(dir, "prompts")),
+      skills: listNames(join(dir, "skills")),
+    })));
+    return;
+  }
+
+  if (command.name === "model") {
+    // Bare `.model` is the chat equivalent of pi's selector UI: report where we
+    // are and what else is on offer, since a room cannot present a picker.
+    if (!command.args) {
+      const { current, live, available } = await agent.describeModel(roomId);
+      const lines = [
+        `Model: \`${current}\`${live ? "" : " (no session yet — this is what the next one starts with)"}`,
+        "",
+        "Available:",
+        ...available.map((m) => `- \`${m}\``),
+        "",
+        "Switch with `.model <provider/id>`. It applies to every room, and is recorded so it survives a restart.",
+      ];
+      await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
+      return;
+    }
+
+    const result = await agent.setModel(command.args);
+    const note = result.ok
+      ? `Model is now \`${result.model}\` for every room — applied to ${result.applied} live session(s) and recorded, so it survives a restart.`
+      : [
+          `No model matches \`${command.args}\`.`,
+          "",
+          "Available:",
+          ...result.available.map((m) => `- \`${m}\``),
+        ].join("\n");
+    await client.sendMessage(roomId, htmlMessage(note));
+    return;
+  }
+
+  if (command.name === "thinking") {
+    if (!command.args) {
+      const { current, live, levels } = await agent.describeThinking(roomId);
+      const lines = [
+        `Thinking: \`${current}\`${live ? "" : " (no session yet — this is what the next one starts with)"}`,
+        "",
+        `Levels: ${levels.map((l) => `\`${l}\``).join(", ")}`,
+        "",
+        "Set it with `.thinking <level>`. It applies to every room, and is recorded so it survives a restart.",
+      ];
+      await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
+      return;
+    }
+
+    const result = await agent.setThinkingLevel(command.args);
+    const note = result.ok
+      ? `Thinking is now \`${result.level}\` for every room — applied to ${result.applied} live session(s) and recorded, so it survives a restart.`
+      : `\`${command.args}\` is not a thinking level. Pick one of: ${result.levels.map((l) => `\`${l}\``).join(", ")}.`;
+    await client.sendMessage(roomId, htmlMessage(note));
+    return;
+  }
+
+  if (command.name === "reload") {
+    const { reloaded, failed } = await agent.reload();
+    const note = failed.length
+      ? `Reloaded ${reloaded} session(s); ${failed.length} failed — see the log.`
+      : reloaded
+        ? `Reloaded ${reloaded} session(s): extensions, skills, prompts and context files re-read.`
+        : "No live sessions to reload — the next message will pick up any changes.";
+    await client.sendMessage(roomId, htmlMessage(note));
+    return;
+  }
+
+  // Everything else is a pi prompt template. Hand it over with the leading
+  // slash intact; pi expands it and runs the agent, so the reply arrives the
+  // usual way.
+  await agent.handleMessage({
+    roomId,
+    text: `/${command.name}${command.args ? ` ${command.args}` : ""}`,
+    sender,
+    client,
+  });
+}
+
+/** Names of the *.md files in a pi resource directory, without extensions. */
+function listNames(dir) {
+  try {
+    return readdirSync(dir).filter((n) => n.endsWith(".md")).map((n) => n.replace(/\.md$/, "")).sort();
+  } catch {
+    return [];
+  }
+}
+
+function htmlMessage(markdown) {
+  return {
+    msgtype: "m.text",
+    body: markdown,
+    format: "org.matrix.custom.html",
+    formatted_body: renderMarkdown(markdown),
+  };
 }
 
 async function main() {
