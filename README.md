@@ -428,7 +428,7 @@ belong to the main room** — see below.
 | `.info` | any room | Shows the model and thinking level in use |
 | `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
-| `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one, `.rooms leave all` leaves all but the main room |
+| `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
 | `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
 | `.help` | main room | Lists the commands, and the prompt templates and skills installed |
@@ -488,17 +488,13 @@ kick the bot out anyway, and more easily. The goodbye goes out before the bot
 leaves, since afterwards there is no room to send it to; the record goes with
 the room, so the next fitting room becomes the control channel and is told so.
 
-`.rooms leave all` does every room except the main one, for tidying up after
-testing or retiring a bot from a set of projects. **That one asks first**, since
-"all" is not deliberate the way an id is: it lists what would go, and only
-`.rooms leave all confirm` does it. Leaving is visible to everyone in those
+There is no "leave everything" form. Leaving is visible to everyone in those
 rooms, getting back in needs a fresh invite, and the bot cannot read anything
-said while it is away. The main room is never included — it is where the report
-has to land.
+said while it is away — so it happens one named room at a time, where each one
+is a choice rather than a consequence of a word.
 
-Either way, each room's cached pi session is dropped as the bot goes; with
-`SESSION_DIR` set the conversation is still on disk and resumes if it is invited
-back. A room that fails to leave is reported rather than stranding the rest.
+The room's cached pi session is dropped as the bot goes; with `SESSION_DIR` set
+the conversation is still on disk and resumes if it is invited back.
 
 `.model` and `.thinking` are how the agent is configured — there is no env var
 for either. Bare, they report where you are and list what is on offer, since a

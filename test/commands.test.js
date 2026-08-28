@@ -36,7 +36,6 @@ describe("command parsing", () => {
       name: "rooms",
       args: "leave !abc:example.org",
     });
-    assert.deepEqual(parseCommand(".rooms leave all confirm"), { name: "rooms", args: "leave all confirm" });
     assert.deepEqual(parseCommand(".rooms"), { name: "rooms", args: "" });
   });
 

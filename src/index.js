@@ -312,23 +312,14 @@ async function runCommand(command, { agent, client, roomId, sender }) {
   if (command.name === "rooms") {
     const joined = await client.getJoinedRooms();
     const main = mainRoom?.roomId ?? "";
-    const others = joined.filter((id) => id !== main);
     const [sub = "", ...rest] = command.args.trim().split(/\s+/).filter(Boolean);
-
-    const usage = [
-      "- `.rooms` — list the rooms the bot is in",
-      "- `.rooms leave <roomId>` — leave one of them",
-      "- `.rooms leave all` — leave every room but this one",
-    ].join("\n");
 
     if (!sub) {
       const lines = ["**Rooms**", ""];
       for (const id of joined) {
         lines.push(`- ${await describeRoom(client, id)}${id === main ? " — **main room**" : ""}`);
       }
-      lines.push("", others.length
-        ? "Leave one with `.rooms leave <roomId>`, or all " + others.length + " with `.rooms leave all`."
-        : "This is the only room the bot is in.");
+      lines.push("", "Leave one with `.rooms leave <roomId>`.");
       await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
       return;
     }
@@ -336,34 +327,9 @@ async function runCommand(command, { agent, client, roomId, sender }) {
     // Room ids are printed in code spans, so a copied one arrives wrapped.
     const target = (rest[0] ?? "").replace(/^`+|`+$/g, "");
     if (sub.toLowerCase() !== "leave" || !target) {
-      await client.sendMessage(roomId, htmlMessage(usage));
-      return;
-    }
-
-    if (target.toLowerCase() === "all") {
-      if (!others.length) {
-        await client.sendMessage(roomId, htmlMessage("Nothing to leave — this is the only room the bot is in."));
-        return;
-      }
-      // Naming a room is deliberate on its own; "all" is not, so it is shown
-      // first and typed twice. Leaving is visible to everyone in those rooms,
-      // takes a fresh invite to undo, and the bot cannot read what it missed.
-      if ((rest[1] ?? "").toLowerCase() !== "confirm") {
-        const lines = [
-          `**Leave ${others.length} room(s)?**`,
-          "",
-          ...(await Promise.all(others.map(async (id) => `- ${await describeRoom(client, id)}`))),
-          "",
-          "Everyone in them sees the bot go, getting back in needs a fresh invite, and it cannot",
-          "read anything said while it is away.",
-          "",
-          "Send `.rooms leave all confirm` to go ahead.",
-        ];
-        await client.sendMessage(roomId, htmlMessage(lines.join("\n")));
-        return;
-      }
-      const { report } = await leaveRooms(client, agent, others);
-      await client.sendMessage(roomId, htmlMessage(report));
+      await client.sendMessage(roomId, htmlMessage(
+        "`.rooms` lists the rooms the bot is in. `.rooms leave <roomId>` leaves one of them.",
+      ));
       return;
     }
 
@@ -384,16 +350,16 @@ async function runCommand(command, { agent, client, roomId, sender }) {
           "the control channel and the bot says so there. If none fits, it has no main room until " +
           "one is invited.",
       ));
-      const { failed } = await leaveRooms(client, agent, [target]);
+      const error = await leaveRoom(client, agent, target);
       // Still here if it did not work, so the failure can still be reported.
-      if (failed.length) {
-        await client.sendMessage(roomId, htmlMessage(`Could not leave: \`${failed[0]}\``));
-      }
+      if (error) await client.sendMessage(roomId, htmlMessage(`Could not leave: ${error}`));
       return;
     }
 
-    const { report } = await leaveRooms(client, agent, [target]);
-    await client.sendMessage(roomId, htmlMessage(report));
+    const error = await leaveRoom(client, agent, target);
+    await client.sendMessage(roomId, htmlMessage(
+      error ? `Could not leave \`${target}\`: ${error}` : `Left \`${target}\`.`,
+    ));
     return;
   }
 
@@ -457,34 +423,24 @@ async function announceMainRoom(client, roomId) {
 }
 
 /**
- * Leave rooms, dropping each one's cached session as it goes.
+ * Leave a room, dropping its cached session with it.
  *
- * Failures are collected rather than thrown, so one room the bot cannot leave
- * does not strand it in the rest.
+ * Returns rather than throws, because the caller may be about to lose the room
+ * it would report into and has to know which happened.
  *
- * @returns {Promise<{ left: string[], failed: string[], report: string }>}
+ * @returns {Promise<string>} "" on success, else why it failed
  */
-async function leaveRooms(client, agent, roomIds) {
-  const left = [];
-  const failed = [];
-  for (const id of roomIds) {
-    try {
-      await client.leaveRoom(id, "Asked to leave from the main room");
-      await agent.disposeRoom(id);
-      left.push(id);
-      LogService.info("bot", `Left ${id} on request from the main room.`);
-    } catch (err) {
-      failed.push(`${id} — ${err?.message ?? err}`);
-      LogService.warn("bot", `Could not leave ${id}: ${err?.message ?? err}`);
-    }
+async function leaveRoom(client, agent, roomId) {
+  try {
+    await client.leaveRoom(roomId, "Asked to leave from the main room");
+    await agent.disposeRoom(roomId);
+    LogService.info("bot", `Left ${roomId} on request from the main room.`);
+    return "";
+  } catch (err) {
+    const why = String(err?.message ?? err);
+    LogService.warn("bot", `Could not leave ${roomId}: ${why}`);
+    return why;
   }
-  const lines = left.length
-    ? [`Left ${left.length} room(s):`, ...left.map((id) => `- \`${id}\``)]
-    : ["Left nothing."];
-  if (failed.length) {
-    lines.push("", `Could not leave ${failed.length}:`, ...failed.map((f) => `- \`${f}\``));
-  }
-  return { left, failed, report: lines.join("\n") };
 }
 
 /**
