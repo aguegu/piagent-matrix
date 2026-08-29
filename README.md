@@ -484,7 +484,7 @@ belong to the main room** — see below.
 | Command | Where | What it does |
 | --- | --- | --- |
 | `.info` | any room | Shows the model and thinking level in use |
-| `.verify` | main room | Runs the `verify` prompt template from `PI_AGENT_DIR/prompts` |
+| `.verify` | main room | pi's `/verify` — its own verify-first checklist |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -520,10 +520,13 @@ whether the room has a live session — sessions are in-memory, so a room chatte
 in for days would report none after a restart, and the values are the same
 either way.
 
-`.verify` is not special-cased: the bot hands `/verify` to pi, which expands the
-template and runs the agent, so the reply arrives like any other. Any prompt
-template you drop in `PI_AGENT_DIR/prompts` works the same way once its name is
-added to `COMMANDS` in `src/commands.js`.
+`.verify` is not special-cased: the bot hands `/verify` straight to pi, which
+expands its own prompt template and runs the agent, so the reply arrives like
+any other. The template is pi's, not the bot's — it lives in
+`PI_AGENT_DIR/prompts` and is not shipped here, so `.verify` does nothing on a
+deployment where pi has not got one. Any prompt template in that directory works
+the same way once its name is added to `COMMANDS` in `src/commands.js`; the
+alias exists because Element eats a leading `/`.
 
 `.reload` calls `AgentSession.reload()` on every live session, not just the room
 that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so
