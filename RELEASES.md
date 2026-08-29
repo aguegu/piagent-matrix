@@ -1,5 +1,7 @@
 # Releases
 
+## 0.2.2 (in progress)
+
 ## 0.2.1 (2026-08-29)
 
 Commands in Matrix, and a main room that adopts itself, says so, checks itself

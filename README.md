@@ -623,14 +623,16 @@ Two things the script deliberately does:
 
 ```
 config/default.js       dotenv-flow bootstrap + config tree
-src/index.js            entry point: client, handlers, shutdown
+src/index.js            entry point: client, handlers, command dispatch
 src/agent.js            per-room pi sessions, serialization, reply rendering
+src/commands.js         the command allowlist and which room may run each
+src/main-room.js        adopting, verifying and dropping the control channel
 src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
 src/resources.js        installs agent/ into PI_AGENT_DIR on start
-agent/AGENTS.md         standing instructions that ship with the bot
 src/status.js           typing indicator (+ an unused edit-in-place helper)
-scripts/cross-sign.js  provisioning, matrix-js-sdk only
+agent/AGENTS.md         standing instructions that ship with the bot
+scripts/cross-sign.js   provisioning, matrix-js-sdk only
 docs/pi-integration.md  pi API notes and design decisions
 test/                   node:test suites
 data/                   the bot's identity          (gitignored)
@@ -698,6 +700,8 @@ directory, and consider passing an explicit `tools` allowlist to
 - [x] pi agent wired in, per-room sessions and serialization
 - [x] Outbox for other processes
 - [x] Markdown replies
+- [x] A main room that adopts, verifies and repairs itself
+- [x] Commands in Matrix, with the controls held to the main room
 - [ ] Ignore pre-startup events; add a run timeout
 - [ ] Scope the agent's tools and working directory
 - [ ] systemd unit for deployment

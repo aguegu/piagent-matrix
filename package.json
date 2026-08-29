@@ -1,6 +1,6 @@
 {
   "name": "piagent-matrix",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Talk to the pi coding agent from any Matrix client — end-to-end encrypted, with a persistent crypto store.",
   "type": "module",

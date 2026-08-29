@@ -109,3 +109,14 @@ ones are:
   `data/agent.json` and set with `.model`.
 - Sessions are cached per room for the process lifetime, so newly installed
   extensions and skills need a restart.
+- **`agentDir` does not reach extensions.** Passing it to `createAgentSession`
+  steers pi's own loading, but an extension asking pi where the agent directory
+  is calls the exported `getAgentDir()`, which reads `PI_CODING_AGENT_DIR` and
+  otherwise answers `~/.pi/agent`. The bot exports it to match. An extension
+  that hardcodes `homedir()/.pi/agent` instead of calling `getAgentDir()` is
+  beyond reach — that is a bug to report upstream.
+- Prompt templates are **not** context. pi loads them from `agentDir/prompts`
+  and `$cwd/.pi/prompts`, non-recursively, named by filename, and expands one
+  only when a message starts with `/<name>` — so a directory of them costs
+  nothing per turn. A context file is read on every turn instead, which is the
+  argument for keeping `AGENTS.md` short.
