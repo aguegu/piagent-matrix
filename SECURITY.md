@@ -40,10 +40,11 @@ Consequences worth being explicit about:
 - **Empty also means every *bot*.** Two agents left in one room with no
   allowlist will answer each other with nobody present — observed here for 59
   turns, each running shell commands and spending tokens on the other's output.
-  The bot now sends `m.notice`, which automated clients are expected to ignore,
-  so a well-behaved counterpart cannot be drawn in; that is a convention, not a
-  guarantee, and it does nothing about a bot that ignores it. The allowlist is
-  what actually decides who may drive the agent.
+  The bot sends `m.notice` and hears it, so agents can say something useful to
+  each other; a run of automated messages with nobody else speaking is cut off
+  after a few turns, and a message from a person resumes it. That bounds the
+  cost of a runaway, not who may cause one — the allowlist is what decides who
+  may drive the agent.
 - **`BOT_CWD` is not a security boundary.** It sets the agent's working
   directory, so relative paths and file searches resolve there — useful hygiene,
   but the shell is not chrooted and absolute paths reach anything the bot's user

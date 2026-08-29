@@ -5,7 +5,7 @@
 // identity instead of minting a new Olm account on every boot the way the
 // old matrix-js-sdk path did.
 //
-// Step 2: each allowed m.text message is forwarded to a per-room AgentManager
+// Step 2: each allowed message is forwarded to a per-room AgentManager
 // (see ./agent.js). The reply streams back into the room via LiveMessage
 // (edit-in-place, with the encrypted-room dance baked in — see ./status.js).
 
@@ -31,6 +31,7 @@ import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
+import { createLoopGuard } from "./loop-guard.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -156,6 +157,8 @@ let stopOutbox = null;
 let mainRoom = null;
 /** roomId -> whoever invited the bot, for invites seen this run. */
 const invitedBy = new Map();
+/** Bounds a run of bots answering bots; see src/loop-guard.js. */
+const loopGuard = createLoopGuard();
 function getAgent() {
   if (!agentPromise) {
     const opts = config.get("agent");
@@ -194,17 +197,33 @@ async function shutdown(signal) {
 async function handleRoomMessage(client, roomId, event) {
   if (event.sender === (await client.getUserId())) return;
   const body = event.content?.body;
-  if (event.content?.msgtype !== "m.text" || !body) return;
+  const msgtype = event.content?.msgtype;
+  // m.notice is how an automated client speaks, this bot included. It is heard
+  // rather than ignored, so two agents in a room can say something useful to
+  // each other; the run of them is what is bounded, below.
+  const automated = msgtype === "m.notice";
+  if ((msgtype !== "m.text" && !automated) || !body) return;
 
   if (!isAllowed(event.sender)) {
     LogService.info("bot", `Ignoring ${event.sender} — not allowed.`);
     return;
   }
 
+  if (!loopGuard.allow(roomId, automated)) {
+    // The agent decides when an exchange is finished, and usually does. This is
+    // only for when it does not, and nobody is in the room to notice.
+    LogService.warn(
+      "bot",
+      `Ignoring ${event.sender} in ${roomId}: ${loopGuard.streakOf(roomId)} automated messages ` +
+        "in a row with nobody else speaking. A message from a person resumes it.",
+    );
+    return;
+  }
+
   const encrypted = await client.crypto.isRoomEncrypted(roomId).catch(() => false);
   LogService.info(
     "bot",
-    `< ${encrypted ? "[e2ee] " : ""}${event.sender}: ${JSON.stringify(body)}`,
+    `< ${encrypted ? "[e2ee] " : ""}${automated ? "[bot] " : ""}${event.sender}: ${JSON.stringify(body)}`,
   );
 
   // Acknowledge immediately so the sender sees the bot registered the message
@@ -655,6 +674,7 @@ async function main() {
     const reason = event?.content?.reason ? `: ${event.content.reason})` : ")";
     LogService.info("bot", `Left ${roomId}${by}${reason}.`);
     invitedBy.delete(roomId);
+    loopGuard.forget(roomId);
 
     if (roomId !== mainRoom?.roomId) return;
     if (mainRoom.unset(kicked ? "the bot was kicked from it" : "the bot is no longer in it")) {

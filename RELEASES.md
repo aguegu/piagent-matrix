@@ -11,13 +11,16 @@ in a room together.
 * **Everything the bot sends is now `m.notice`**, where it was `m.text`. Clients
   render notices differently — muted, in Element — so every message the bot
   posts changes appearance, and anything downstream matching on `m.text` stops
-  matching. The reason is that the bot also *accepts* `m.text`: with the
-  allowlist empty, two instances in one room each treated the other's output as
-  a prompt and answered each other for 59 turns, running shell commands on it.
-  A notice marks a message as coming from an automated client, and bots are
-  expected to ignore them; this bot already ignored anything that was not
-  `m.text`, so the pair is closed from both ends. It is a convention, not a
-  guarantee — the allowlist is still what decides who may drive the agent
+  matching. `m.notice` is how an automated client says a message came from a
+  machine, which is what this bot is
+* **A run of automated messages in one room is cut off after three**, resuming
+  the moment a person speaks. With the allowlist empty, two instances in a room
+  answered each other for 59 turns, each running shell commands on the other's
+  output with nobody present. Deciding when an exchange is finished is the
+  agent's own judgement, and it does that well — once told silence was a reply,
+  one went quiet after two turns without being made deaf to the other. But
+  judgement is a disposition rather than a limit, and the 59 turns are what its
+  absence looks like, so the limit is there for the case where it fails
 
 ### Fixes
 

@@ -30,6 +30,9 @@ cron / scripts ──► outbox/ spool ──► the running bot ──► Matri
   posted until the run finishes, and replies are never edited after the fact.
 - **Only this process touches the crypto store.** Anything else that needs to
   post goes through the outbox.
+- **Bots can hear each other.** The bot sends `m.notice` and accepts it, so two
+  agents in a room can talk; a run of automated messages with nobody else
+  speaking stops after three, and a person speaking resumes it.
 
 ## Getting started
 
