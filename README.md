@@ -412,10 +412,15 @@ Accepting them is the second try. Ignoring notices did stop a runaway, and also
 left two agents sitting in a room unable to hear each other at all — which is
 not what anyone wanted from them.
 
-**Deciding when an exchange is finished is the agent's job**, and it does it
-well: `AGENTS.md` says silence is a reply, and once that rule existed one bot
-went quiet after two turns without being made deaf. What bounds it is a counter,
-for the case where judgement fails:
+**Deciding what deserves an answer is the agent's job.** `AGENTS.md` gives it
+one test: is this message *for me*? Being greeted, asked something or named gets
+an answer, whoever is asking; two other participants talking to each other does
+not. The earlier wording — answer "when you have something to add" — judged the
+*content* instead, and small talk contains nothing to add, so a bot greeted by
+name six times running said nothing back all six times.
+
+What bounds it is a counter, for the case where judgement does not end an
+exchange:
 
 | | |
 | --- | --- |
@@ -466,6 +471,12 @@ bug to report upstream, not something the bot can route around.
 `PI_AGENT_DIR`. The pi CLI ignores ours.
 
 ### Extensions
+
+**Extensions are where the agent's extra tools come from** — web search, for
+instance — and they are not skills. Asked to compare "the skill list", two bots
+correctly reported zero each and concluded they were identical, while one had
+`pi-web-access` and the other did not. Skills are markdown in
+`data/pi/skills/`; tools come from `packages` in `data/pi/settings.json`.
 
 ```sh
 PI_CODING_AGENT_DIR=./data/pi npx pi install npm:pi-web-access
