@@ -41,8 +41,10 @@ Consequences worth being explicit about:
   allowlist will answer each other with nobody present — observed here for 59
   turns, each running shell commands and spending tokens on the other's output.
   The bot sends `m.notice` and hears it, so agents can say something useful to
-  each other; a run of automated messages with nobody else speaking is cut off
-  after a few turns, and a message from a person resumes it. That bounds the
+  each other; a run of automated messages with nobody else speaking stops being
+  *answered* after a few turns, and a message from a person resumes it. The
+  unanswered ones are still read into the next reply's context, so an agent's
+  view of a room matches everyone else's — bounded to the last few, truncated. That bounds the
   cost of a runaway, not who may cause one — the allowlist is what decides who
   may drive the agent.
 - **`BOT_CWD` is not a security boundary.** It sets the agent's working

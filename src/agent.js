@@ -132,8 +132,15 @@ export class AgentManager {
    *
    * The room id only needs saying once — it is the same for the whole session.
    */
-  #preamble(roomId, sender, roomName) {
+  #preamble(roomId, sender, roomName, missed = []) {
     const lines = ["[context]", `This message is from ${sender}.`];
+    if (missed.length) {
+      // Said in the room while the bot was not replying — see src/loop-guard.js.
+      // Included so the agent's view of the conversation matches everyone
+      // else's; it was not answered, but it was not unheard either.
+      lines.push(`Also said since you last replied, which you did not answer:`);
+      for (const m of missed) lines.push(`  ${m.sender}: ${m.body.replace(/\s+/g, " ")}`);
+    }
     if (!this.briefed.has(roomId)) {
       const where = roomName ? `"${roomName}" (${roomId})` : roomId;
       lines.push(`You are replying in Matrix room ${where}. "here" and "this room" mean that room id.`);
@@ -274,6 +281,7 @@ export class AgentManager {
    * @param {string} ctx.roomId
    * @param {string} ctx.text
    * @param {string} ctx.sender
+   * @param {{sender: string, body: string}[]} [ctx.missed]  said but not answered
    * @param {import('matrix-bot-sdk').MatrixClient} ctx.client
    */
   async handleMessage(ctx) {
@@ -307,7 +315,7 @@ export class AgentManager {
   }
 
   /** Run exactly one prompt to completion. Callers must hold the room's turn. */
-  async #runPrompt({ roomId, text, sender, client }) {
+  async #runPrompt({ roomId, text, sender, missed = [], client }) {
     LogService.info("agent", `→ ${sender} in ${roomId}: ${JSON.stringify(text)}`);
 
     const session = await this.#getOrCreateSession(roomId);
@@ -343,7 +351,7 @@ export class AgentManager {
     if (!isSlashCommand) {
       // Only worth fetching for the turn that names the room.
       const roomName = this.briefed.has(roomId) ? "" : await roomDisplayName(client, roomId);
-      prompt = this.#preamble(roomId, sender, roomName) + text;
+      prompt = this.#preamble(roomId, sender, roomName, missed) + text;
       this.briefed.add(roomId);
     }
 

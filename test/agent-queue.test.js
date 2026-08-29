@@ -399,3 +399,40 @@ describe("naming the room", () => {
     assert.equal(calls, 1, "only the turn that names the room pays for it");
   });
 });
+
+describe("messages seen but not answered", () => {
+  it("ride along with the next one that is", async () => {
+    // The loop guard stops the bot replying, not hearing. Without this the
+    // agent's view of the room would differ from everyone else's, and it would
+    // not know why.
+    const session = makeFakeSession();
+    const mgr = makeManager(session);
+    const client = makeFakeClient();
+
+    await mgr.handleMessage({
+      roomId: "!r:example.org",
+      text: "so what did you two decide?",
+      sender: "@agu:example.org",
+      missed: [
+        { sender: "@bk15pi:example.org", body: "I think we should use the outbox" },
+        { sender: "@bk15pi:example.org", body: "or maybe not" },
+      ],
+      client,
+    });
+
+    const [prompt] = session.promptsRun;
+    assert.match(prompt, /did not answer/);
+    assert.match(prompt, /@bk15pi:example\.org: I think we should use the outbox/);
+    assert.match(prompt, /@bk15pi:example\.org: or maybe not/);
+    assert.ok(prompt.endsWith("so what did you two decide?"));
+  });
+
+  it("says nothing extra when nothing was withheld", async () => {
+    const session = makeFakeSession();
+    const mgr = makeManager(session);
+    await mgr.handleMessage({
+      roomId: "!r:example.org", text: "hi", sender: "@agu:example.org", client: makeFakeClient(),
+    });
+    assert.doesNotMatch(session.promptsRun[0], /did not answer/);
+  });
+});

@@ -16,11 +16,26 @@
 // m.notice means "an automated client sent this", and people do not send it.
 
 /**
+ * What is withheld is still remembered. Declining to *answer* is the point;
+ * declining to *hear* would leave the agent with a hole in the conversation
+ * that everyone else in the room saw — asked later what was decided, it could
+ * not say, and would not know why. Withheld messages ride along with the next
+ * one it does answer, so its view of the room stays whole.
+ *
+ * Bounded, because the thing being withheld is a bot that will not stop
+ * talking: the last few, each truncated.
+ */
+const KEEP = 10;
+const KEEP_CHARS = 300;
+
+/**
  * @param {number} limit consecutive automated messages answered per room
  */
 export function createLoopGuard(limit = 3) {
   /** roomId -> consecutive automated messages seen since a person last spoke. */
   const streak = new Map();
+  /** roomId -> messages seen but not answered, awaiting the next answered one. */
+  const withheld = new Map();
 
   return {
     /**
@@ -41,6 +56,20 @@ export function createLoopGuard(limit = 3) {
       return n <= limit;
     },
 
+    /** Remember a message that was not answered, so it is not lost. */
+    withhold(roomId, sender, body) {
+      const kept = withheld.get(roomId) ?? [];
+      kept.push({ sender, body: String(body).slice(0, KEEP_CHARS) });
+      withheld.set(roomId, kept.slice(-KEEP));
+    },
+
+    /** Take what was withheld since the last answered message. */
+    drain(roomId) {
+      const kept = withheld.get(roomId) ?? [];
+      withheld.delete(roomId);
+      return kept;
+    },
+
     /** Consecutive automated messages in a room, for logging. */
     streakOf(roomId) {
       return streak.get(roomId) ?? 0;
@@ -49,6 +78,7 @@ export function createLoopGuard(limit = 3) {
     /** Forget a room, on leaving it. */
     forget(roomId) {
       streak.delete(roomId);
+      withheld.delete(roomId);
     },
   };
 }

@@ -21,6 +21,12 @@ in a room together.
   one went quiet after two turns without being made deaf to the other. But
   judgement is a disposition rather than a limit, and the 59 turns are what its
   absence looks like, so the limit is there for the case where it fails
+* What the limit withholds is still heard. Not answering is the point; not
+  hearing would leave the agent with a hole in the conversation that everyone
+  else in the room saw, so asked later what was decided it could neither say nor
+  explain. Unanswered messages are carried into the context of the next reply —
+  the last ten, truncated, since what is being withheld is a bot that will not
+  stop talking
 
 ### Fixes
 

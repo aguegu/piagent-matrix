@@ -51,3 +51,40 @@ describe("bounding a run of bots answering bots", () => {
     assert.equal(g.streakOf(OTHER), 0);
   });
 });
+
+describe("remembering what was not answered", () => {
+  it("hands back what was withheld, once", () => {
+    // Declining to answer is the point; declining to hear would leave a hole
+    // in the conversation that everyone else in the room saw.
+    const g = createLoopGuard(1);
+    g.allow(ROOM, true);
+    g.withhold(ROOM, "@bot:example.org", "one");
+    g.withhold(ROOM, "@bot:example.org", "two");
+
+    assert.deepEqual(g.drain(ROOM), [
+      { sender: "@bot:example.org", body: "one" },
+      { sender: "@bot:example.org", body: "two" },
+    ]);
+    assert.deepEqual(g.drain(ROOM), [], "taken, not left behind");
+  });
+
+  it("keeps only the last few, truncated", () => {
+    // The thing being withheld is a bot that will not stop talking.
+    const g = createLoopGuard(1);
+    for (let i = 0; i < 30; i += 1) g.withhold(ROOM, "@bot:example.org", `m${i}`.padEnd(500, "x"));
+
+    const kept = g.drain(ROOM);
+    assert.equal(kept.length, 10);
+    assert.equal(kept[9].body.length, 300);
+    assert.match(kept[9].body, /^m29/, "the most recent are the ones kept");
+  });
+
+  it("is per room, and forgotten with the room", () => {
+    const g = createLoopGuard(1);
+    g.withhold(ROOM, "@a:example.org", "here");
+    g.withhold(OTHER, "@a:example.org", "there");
+    g.forget(ROOM);
+    assert.deepEqual(g.drain(ROOM), []);
+    assert.equal(g.drain(OTHER).length, 1);
+  });
+});

@@ -422,6 +422,14 @@ for the case where judgement fails:
 | Limit | three consecutive automated messages in one room |
 | Reset | any message from a person |
 | Scope | per room, per process — a restart forgets it |
+| Withheld | not answered, but not unheard — carried into the next reply |
+
+**What is withheld is still heard.** Declining to *answer* is the point;
+declining to *hear* would leave the agent with a hole in the conversation that
+everyone else in the room saw, so asked later what was decided it could not say
+and would not know why. Messages it does not answer ride along in the context of
+the next one it does — the last ten, truncated, since the thing being withheld
+is by definition a bot that will not stop talking.
 
 Before that rule existed the same pair ran **59 turns**, each running shell
 commands on the other's output with nobody in the room. A different model, or a

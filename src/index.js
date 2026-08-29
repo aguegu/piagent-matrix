@@ -210,12 +210,14 @@ async function handleRoomMessage(client, roomId, event) {
   }
 
   if (!loopGuard.allow(roomId, automated)) {
-    // The agent decides when an exchange is finished, and usually does. This is
-    // only for when it does not, and nobody is in the room to notice.
+    // Not answered, but not unheard: it rides along with the next message the
+    // agent does answer, so its view of the room matches everyone else's.
+    loopGuard.withhold(roomId, event.sender, body);
     LogService.warn(
       "bot",
-      `Ignoring ${event.sender} in ${roomId}: ${loopGuard.streakOf(roomId)} automated messages ` +
-        "in a row with nobody else speaking. A message from a person resumes it.",
+      `Not answering ${event.sender} in ${roomId}: ${loopGuard.streakOf(roomId)} automated ` +
+        "messages in a row with nobody else speaking. Held for the next reply; a message from " +
+        "a person resumes it.",
     );
     return;
   }
@@ -238,7 +240,13 @@ async function handleRoomMessage(client, roomId, event) {
   await withTyping(client, roomId, async () => {
     const agent = await getAgent();
     if (command) return runCommand(command, { agent, client, roomId, sender: event.sender });
-    await agent.handleMessage({ roomId, text: body, sender: event.sender, client });
+    await agent.handleMessage({
+      roomId,
+      text: body,
+      sender: event.sender,
+      missed: loopGuard.drain(roomId),
+      client,
+    });
   });
 }
 
