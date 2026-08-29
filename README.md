@@ -563,8 +563,15 @@ actually ask. `package.json` is bumped once when a release opens, so every host
 between two releases reports the same number while running different code, and
 "has this one been upgraded yet?" stays unanswerable. It is read from `.git`
 rather than by running git, so there is no subprocess at startup; a deployment
-without a checkout reports the version alone. The same line opens the startup
-log. Deliberately no caveat about
+without a checkout reports the version alone, and one without `package.json`
+either reports just the name. A worktree or submodule, where `.git` is a file
+pointing elsewhere, is followed.
+
+It is read **once, at startup**, not per `.info`. Reading it live would report
+whatever is checked out now, so a host pulled but not restarted would name the
+new commit while running the old code — the one case this exists to catch. What
+it still cannot see is a tree edited in place: the commit says where the
+checkout is, not that the files match it. The same line opens the startup log. Deliberately no caveat about
 whether the room has a live session — sessions are in-memory, so a room chatted
 in for days would report none after a restart, and the values are the same
 either way.

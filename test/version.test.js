@@ -35,6 +35,18 @@ describe("naming the build", () => {
     assert.equal(readCommit(root), "39bbb25");
   });
 
+  it("follows a .git file to the real gitdir", () => {
+    // A worktree or submodule has .git as a file: `gitdir: <elsewhere>`.
+    // Treating it as a directory reported nothing for a real checkout.
+    const real = join(root, "elsewhere");
+    mkdirSync(real, { recursive: true });
+    writeFileSync(join(real, "HEAD"), `${SHA}\n`);
+    rmSync(join(root, ".git"), { recursive: true, force: true });
+    writeFileSync(join(root, ".git"), `gitdir: ${real}\n`);
+
+    assert.equal(readCommit(root), "39bbb25");
+  });
+
   it("reports no commit outside a checkout", () => {
     // A tarball or an image built by copying has none, which is honest.
     rmSync(join(root, ".git"), { recursive: true, force: true });

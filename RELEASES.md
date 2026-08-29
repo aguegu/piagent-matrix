@@ -4,7 +4,7 @@
 
 ### New Features
 
-* `.info` and the startup log name the build — `piagent-matrix 0.2.2 (39bbb25)`. The version alone could not answer the question that kept coming up, since `package.json` is bumped once when a release opens and every host between two releases reports the same number while running different code. The commit is read from `.git` rather than by running git, so there is no subprocess at startup; a deployment without a checkout reports the version alone
+* `.info` and the startup log name the build — `piagent-matrix 0.2.2 (39bbb25)`. The version alone could not answer the question that kept coming up, since `package.json` is bumped once when a release opens and every host between two releases reports the same number while running different code. The commit is read from `.git` rather than by running git, so there is no subprocess at startup; a deployment without a checkout reports the version alone, and a worktree or submodule — where `.git` is a file pointing elsewhere — is followed. It is read once at startup rather than per `.info`, so a host pulled but not restarted reports the code it is running rather than the code on disk
 
 ## 0.2.2 (2026-08-29)
 
