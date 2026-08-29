@@ -28,7 +28,7 @@ import { renderMarkdown } from "./markdown.js";
 import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
-import { MainRoom, roomFits } from "./main-room.js";
+import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
 
 const matrix = config.get("matrix");
@@ -153,6 +153,8 @@ let botClient = null;
 let stopOutbox = null;
 /** @type {MainRoom | null} */
 let mainRoom = null;
+/** roomId -> whoever invited the bot, for invites seen this run. */
+const invitedBy = new Map();
 function getAgent() {
   if (!agentPromise) {
     const opts = config.get("agent");
@@ -526,7 +528,8 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   if (preferred) {
     const fit = roomFits(await roomMembers(client, preferred), matrix.allowedUsers, me);
     if (fit.ok) {
-      if (mainRoom.adopt(preferred, why || "joined a room that fits", fit.admin)) {
+      const admin = chooseAdmin(invitedBy.get(preferred), fit.admin);
+      if (mainRoom.adopt(preferred, why || "joined a room that fits", admin)) {
         await announceMainRoom(client, preferred);
       }
       return;
@@ -539,7 +542,7 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   for (const roomId of joined) {
     if (roomId === preferred) continue; // already tried, and it did not fit
     const fit = roomFits(await roomMembers(client, roomId), matrix.allowedUsers, me);
-    if (fit.ok) fits.push({ roomId, admin: fit.admin });
+    if (fit.ok) fits.push({ roomId, admin: chooseAdmin(invitedBy.get(roomId), fit.admin) });
   }
 
   if (fits.length === 1) {
@@ -620,6 +623,9 @@ async function main() {
 
   client.on("room.invite", (roomId, event) => {
     LogService.info("bot", `Invited to ${roomId} by ${event.sender} — autojoining.`);
+    // Kept for adoption: if this turns out to be the room that fits, whoever
+    // sent this invite is the admin. See chooseAdmin.
+    if (event.sender) invitedBy.set(roomId, event.sender);
   });
 
   client.on("room.join", async (roomId) => {
@@ -642,6 +648,7 @@ async function main() {
     const by = kicked ? ` (kicked by ${event.sender}` : " (left";
     const reason = event?.content?.reason ? `: ${event.content.reason})` : ")";
     LogService.info("bot", `Left ${roomId}${by}${reason}.`);
+    invitedBy.delete(roomId);
 
     if (roomId !== mainRoom?.roomId) return;
     if (mainRoom.unset(kicked ? "the bot was kicked from it" : "the bot is no longer in it")) {

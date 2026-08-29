@@ -3,7 +3,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MainRoom, roomFits } from "../src/main-room.js";
+import { MainRoom, chooseAdmin, roomFits } from "../src/main-room.js";
 
 const ROOM = "!main:example.org";
 const ADMIN = "@agu:example.org";
@@ -31,13 +31,18 @@ describe("what makes a room fit to be the main room", () => {
     assert.match(fit.why, /3 members/);
   });
 
-  it("takes the other member as admin when the allowlist is empty", () => {
-    // Empty means everyone may command it, so being allowed is not a question.
-    assert.equal(roomFits([BOT, "@anyone:example.org"], [], BOT).admin, "@anyone:example.org");
+  it("names no admin when the allowlist is empty", () => {
+    // Everyone may command it then, so the other member is merely the other
+    // member — and in a room of two bots that would have recorded one of them
+    // as the other's admin. The room still fits; who owns it comes from the
+    // invite instead.
+    const fit = roomFits([BOT, "@anyone:example.org"], [], BOT);
+    assert.equal(fit.ok, true);
+    assert.equal(fit.admin, "");
   });
 
   it("rejects a room the bot would be alone in", () => {
-    // Nobody to be the admin, whatever the allowlist says.
+    // Nobody to answer to, whatever the allowlist says.
     assert.equal(roomFits([BOT], [], BOT).ok, false);
     assert.equal(roomFits([BOT], [ADMIN], BOT).ok, false);
   });
@@ -45,6 +50,28 @@ describe("what makes a room fit to be the main room", () => {
   it("rejects a room whose membership could not be read", () => {
     // Adopting on a failed lookup would pick a room nobody checked.
     assert.equal(roomFits(null, [ADMIN], BOT).ok, false);
+  });
+});
+
+describe("who the main room belongs to", () => {
+  it("is whoever invited the bot into it", () => {
+    assert.equal(chooseAdmin(ADMIN, ""), ADMIN);
+  });
+
+  it("prefers the invite over the room's membership", () => {
+    // With no allowlist the membership says nothing; with one it agrees anyway
+    // in the ordinary case. The invite is the fact either way.
+    assert.equal(chooseAdmin(ADMIN, "@someone-else:example.org"), ADMIN);
+  });
+
+  it("falls back to the allowlisted member when no invite was seen", () => {
+    // A room adopted at startup, joined before this run.
+    assert.equal(chooseAdmin(undefined, ADMIN), ADMIN);
+  });
+
+  it("records nobody when neither is known", () => {
+    // Unrecorded reads as unknown, which is true; a guess reads as established.
+    assert.equal(chooseAdmin(undefined, ""), "");
   });
 });
 

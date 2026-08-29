@@ -37,10 +37,15 @@ import { LogService } from "matrix-bot-sdk";
 /**
  * Whether a room is shaped like a control channel, and who its admin is.
  *
- * A fitting room has exactly one member besides the bot, and that member is
- * the admin — the person the control channel belongs to. It is returned so it
+ * A fitting room has exactly one member besides the bot. Who that is decides
+ * whether the room fits when MATRIX_ALLOWED_USERS is set, and is returned so it
  * can be recorded alongside the room: a room id alone says where the bot takes
  * orders, not who from.
+ *
+ * With an empty allowlist no admin is named here. Everyone may command the bot
+ * then, so the other member is merely the other member — and in a room holding
+ * two bots that would have recorded one of them as the other's admin. See
+ * chooseAdmin: the invite is the better answer, and this is the fallback.
  *
  * @param {string[]|null} members  user ids in the room, null if unknown
  * @param {string[]} allowedUsers  MATRIX_ALLOWED_USERS; empty means everyone
@@ -55,17 +60,32 @@ export function roomFits(members, allowedUsers = [], botUserId = "") {
   }
 
   const others = members.filter((m) => m !== botUserId);
+  if (!others.length) return no("the bot would be alone in it, with nobody to answer to");
+
   // An empty allowlist means everyone may command the bot, so being allowed is
-  // not a question — but there still has to be somebody there to be the admin.
-  const admins = allowedUsers.length ? others.filter((m) => allowedUsers.includes(m)) : others;
-  if (!admins.length) {
-    return no(
-      allowedUsers.length
-        ? "it holds nobody from MATRIX_ALLOWED_USERS"
-        : "the bot would be alone in it, with no admin",
-    );
-  }
+  // not a question — and neither is who the admin is, so none is named.
+  if (!allowedUsers.length) return { ok: true, why: "", admin: "" };
+
+  const admins = others.filter((m) => allowedUsers.includes(m));
+  if (!admins.length) return no("it holds nobody from MATRIX_ALLOWED_USERS");
   return { ok: true, why: "", admin: admins[0] };
+}
+
+/**
+ * Who the main room belongs to.
+ *
+ * Whoever invited the bot into the room that became its control channel. That
+ * is the person who set the bot up, it is a fact the bot observed rather than
+ * an inference from who happens to be in the room, and it holds when
+ * MATRIX_ALLOWED_USERS is empty — where membership says nothing, because
+ * everyone is allowed and the other member may well be another bot.
+ *
+ * The allowlisted member is the fallback, for a room adopted at startup where
+ * no invite was seen. Empty when neither is known: unrecorded reads as unknown,
+ * which is true, where a guess reads as established.
+ */
+export function chooseAdmin(inviter, allowlistedMember) {
+  return inviter || allowlistedMember || "";
 }
 
 export class MainRoom {

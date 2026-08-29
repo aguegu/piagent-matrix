@@ -326,7 +326,8 @@ set — the other one may run commands. That last part is what makes adoption
 safe. A stranger cannot hand the bot a control channel by inviting it somewhere,
 and a busy working room cannot become one by accident.
 
-That other member is the room's **admin**, and is recorded alongside it:
+The room's **admin** is recorded alongside it — whoever invited the bot into the
+room that became its control channel:
 
 ```json
 {
@@ -336,9 +337,16 @@ That other member is the room's **admin**, and is recorded alongside it:
 }
 ```
 
-A room id on its own says where the bot takes orders, not who from. The startup
-log and `.rooms` both name the admin, and the room is flagged at startup if they
-are no longer in it — a control channel outliving the person it was adopted for
+A room id on its own says where the bot takes orders, not who from. The invite
+is used rather than the room's membership because it is a fact the bot observed,
+and because membership answers nothing when `MATRIX_ALLOWED_USERS` is empty:
+everyone is allowed then, and the other member may be another bot. The
+allowlisted member is the fallback for a room adopted at startup, where no
+invite was seen; with neither, no admin is recorded, since unrecorded reads as
+unknown where a guess reads as established.
+
+The startup log and `.rooms` both name the admin, and the room is flagged at
+startup if they are no longer in it — a control channel outliving the person it was adopted for
 is worth noticing, even though it still works. Records written before this
 simply carry no `admin`, and are read as before.
 
