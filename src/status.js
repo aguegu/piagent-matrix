@@ -55,7 +55,7 @@ export class LiveMessage {
   }
 
   static async send(client, roomId, text, { throttleMs = 1000 } = {}) {
-    const eventId = await client.sendMessage(roomId, { msgtype: "m.text", body: text });
+    const eventId = await client.sendMessage(roomId, { msgtype: "m.notice", body: text });
     return new LiveMessage(client, roomId, eventId, text, throttleMs);
   }
 
@@ -90,10 +90,10 @@ export class LiveMessage {
   async #flush(text) {
     this.#lastSent = text;
     const content = {
-      msgtype: "m.text",
+      msgtype: "m.notice",
       // Clients that don't understand edits show this fallback.
       body: `* ${text}`,
-      "m.new_content": { msgtype: "m.text", body: text },
+      "m.new_content": { msgtype: "m.notice", body: text },
       "m.relates_to": { rel_type: "m.replace", event_id: this.#eventId },
     };
 

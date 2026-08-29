@@ -121,13 +121,24 @@ export class AgentManager {
    * own Matrix client: two processes sharing the crypto store desynchronise the
    * Megolm ratchet and produce messages strict clients refuse to decrypt.
    */
-  #brief(roomId) {
-    return [
-      "[context]",
-      `You are replying in Matrix room ${roomId}. "here" and "this room" mean that room id.`,
-      "[/context]",
-      "",
-    ].join("\n");
+  /**
+   * The context block in front of an ordinary message.
+   *
+   * The sender goes on every turn, because it changes between turns and the
+   * agent has no other way to see it. Without this it filled the gap with
+   * whoever it usually talks to: asked whether a message came from another bot,
+   * it answered "still @aguegu on my side" three times, having been told
+   * nothing either way.
+   *
+   * The room id only needs saying once — it is the same for the whole session.
+   */
+  #preamble(roomId, sender) {
+    const lines = ["[context]", `This message is from ${sender}.`];
+    if (!this.briefed.has(roomId)) {
+      lines.push(`You are replying in Matrix room ${roomId}. "here" and "this room" mean that room id.`);
+    }
+    lines.push("[/context]", "");
+    return lines.join("\n");
   }
 
   /** A choice recorded by `.thinking` first, then opts, then "low". */
@@ -322,10 +333,11 @@ export class AgentManager {
     //
     // Never in front of a leading slash: pi expands prompt templates and skill
     // commands only when the text starts with "/", so a prefix here would turn
-    // `/verify` into an ordinary message. Such a turn stays unbriefed, and the
-    // context goes out with the next ordinary one.
+    // `/whoami` into an ordinary message. Such a turn carries no context at
+    // all — not even the sender — which is why AGENTS.md tells the agent it is
+    // sometimes not told, rather than to expect it.
     const isSlashCommand = text.startsWith("/");
-    const prompt = this.briefed.has(roomId) || isSlashCommand ? text : this.#brief(roomId) + text;
+    const prompt = isSlashCommand ? text : this.#preamble(roomId, sender) + text;
     if (!isSlashCommand) this.briefed.add(roomId);
 
     try {
@@ -343,9 +355,11 @@ export class AgentManager {
 
     const body = renderReply(buffer);
     if (!body.trim()) {
-      // The agent finished without producing any text content — don't post an
-      // empty message; just log so we can see it happened.
-      LogService.warn("agent", `run in ${roomId} produced no text output`);
+      // Nothing to post. This is a normal outcome, not a failure: AGENTS.md
+      // tells the agent that silence is a reply, so a message needing nothing
+      // from it should produce nothing — which is also what keeps it out of a
+      // conversation between other people.
+      LogService.info("agent", `run in ${roomId} said nothing`);
       return;
     }
     await this.#post(client, roomId, body, renderReplyHtml(buffer));
@@ -402,7 +416,7 @@ export class AgentManager {
 
   async #post(client, roomId, body, html = null) {
     try {
-      const content = { msgtype: "m.text", body };
+      const content = { msgtype: "m.notice", body };
       // Fall back to treating the body itself as markdown for simple notices.
       const formatted = html ?? renderMarkdown(body);
       if (formatted && formatted !== body) {

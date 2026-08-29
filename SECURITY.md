@@ -22,6 +22,13 @@ Consequences worth being explicit about:
 - **`MATRIX_ALLOWED_USERS` is the only access control.** Leaving it empty means
   *everyone* who can reach the bot is allowed; the bot warns on every message
   when this happens. Set it.
+- **Empty also means every *bot*.** Two agents left in one room with no
+  allowlist will answer each other with nobody present — observed here for 59
+  turns, each running shell commands and spending tokens on the other's output.
+  The bot now sends `m.notice`, which automated clients are expected to ignore,
+  so a well-behaved counterpart cannot be drawn in; that is a convention, not a
+  guarantee, and it does nothing about a bot that ignores it. The allowlist is
+  what actually decides who may drive the agent.
 - **`BOT_CWD` is not a security boundary.** It sets the agent's working
   directory, so relative paths and file searches resolve there — useful hygiene,
   but the shell is not chrooted and absolute paths reach anything the bot's user

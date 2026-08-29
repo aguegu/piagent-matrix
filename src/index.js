@@ -563,9 +563,15 @@ async function settleMainRoom(client, { preferred = "", why = "" } = {}) {
   );
 }
 
+// Outgoing messages are m.notice, not m.text. The spec marks notices as coming
+// from an automated client and expects bots watching a room to ignore them,
+// which is the only thing that stops two bots in one room answering each other
+// forever — as bk18pi and bk15pi did for 59 turns once the allowlist was
+// emptied. This bot already ignores everything that is not m.text, so the pair
+// is complete: it cannot hear another bot, and another bot cannot hear it.
 function htmlMessage(markdown) {
   return {
-    msgtype: "m.text",
+    msgtype: "m.notice",
     body: markdown,
     format: "org.matrix.custom.html",
     formatted_body: renderMarkdown(markdown),

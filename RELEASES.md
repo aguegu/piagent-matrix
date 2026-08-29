@@ -4,10 +4,13 @@
 
 ### Fixes
 
+* **Two bots in one room answered each other indefinitely.** Replies went out as `m.text`, which the bot also accepts, so with `MATRIX_ALLOWED_USERS` empty each instance treated the other's output as a prompt — 59 turns before anyone looked. Everything the bot sends is now `m.notice`, which automated clients are expected to ignore and which this bot already ignored, so the pair is closed
+* **The agent was never told who was speaking.** The sender reached `#runPrompt` and went into a log line and nowhere else, so asked whether a message came from another bot it answered "still `@aguegu` on my side" three times, having been given nothing either way. Ordinary messages now carry `This message is from <sender>`, on every turn because it changes between turns. A turn beginning with `/` still carries no context — a prefix would stop pi expanding the template — so `AGENTS.md` tells the agent it is sometimes not told, and never to name a sender it was not given
 * The shipped `AGENTS.md` listed the commands the bot intercepts but omitted `.reload`, so the agent could offer to handle one it never sees
 
 ### Improvements
 
+* **Silence is a reply.** `AGENTS.md` now says that a message needing nothing produces no text at all — people talk to each other in these rooms, and another bot may be talking too. The empty-reply path already posted nothing; it logged a warning, as though a run that said nothing had gone wrong, and now logs plainly
 * The agent is told its own Matrix user id and working directory. It had neither, so it could not say who it was on Matrix, and could not tell itself apart from the people in a room whose membership it had just read. The id comes from `client.getUserId()` rather than `MATRIX_USER_ID` — the server's answer for the token in use, which is the one that differs when credentials have been swapped without swapping `data/token.json`
 * Installing warns about a `{{PLACEHOLDER}}` nothing supplies, and reports it. Substitution leaves an unknown name in place, which beats blanking it — an emptied path reads as a working instruction — but a typo would otherwise have shipped the agent an instruction to look in a directory called `{{DATA_DIR}}`
 * The outbox protocol moves from the per-room briefing into the shipped `AGENTS.md`, using `{{OUTBOX_DIR}}`. It was in both, precisely in one and vaguely in the other — and the briefing is part of the first user message, so it stays in the session history and is re-sent every turn regardless. One copy now, and a session whose first message is a slash command has it too, where before it skipped the briefing and never learned how to send anything

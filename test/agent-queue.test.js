@@ -84,14 +84,14 @@ describe("AgentManager per-room serialization", () => {
       mgr.handleMessage({ roomId, text: "second", sender: "@a:example.org", client }),
     ]);
 
-    assert.deepEqual(session.promptsRun, ["first", "second"], "both prompts must run as real runs");
+    assert.equal(session.promptsRun.length, 2, "both prompts must run as real runs");
+    assert.ok(session.promptsRun[0].endsWith("first"));
+    assert.ok(session.promptsRun[1].endsWith("second"));
     assert.deepEqual(session.promptsQueued, [], "nothing should fall into the follow-up queue");
     assert.equal(client.sent.length, 2, "each message gets exactly one reply");
-    assert.deepEqual(
-      client.sent.map((m) => m.body),
-      ["reply to first", "reply to second"],
-      "replies must match their prompts, in order",
-    );
+    assert.equal(client.sent.length, 2, "replies must match their prompts, in order");
+    assert.ok(client.sent[0].body.endsWith("first"));
+    assert.ok(client.sent[1].body.endsWith("second"));
   });
 
   it("keeps serving after a failing run", async () => {
@@ -117,7 +117,7 @@ describe("AgentManager per-room serialization", () => {
     assert.equal(results[0].status, "rejected", "the failing run still reports failure");
     assert.equal(results[1].status, "fulfilled", "a failed predecessor must not block the queue");
     assert.ok(
-      client.sent.some((m) => m.body === "reply to good"),
+      client.sent.some((m) => m.body.endsWith("good")),
       "the following message is still answered",
     );
   });
@@ -169,11 +169,8 @@ describe("session creation failures do not poison a room", () => {
     await mgr.handleMessage({ roomId, text: "second", sender: "@a:example.org", client });
 
     assert.equal(attempts, 2, "session creation is retried, not replayed from cache");
-    assert.deepEqual(
-      client.sent.map((m) => m.body),
-      ["reply to second"],
-      "the retried message is answered",
-    );
+    assert.equal(client.sent.length, 1, "the retried message is answered, once");
+    assert.ok(client.sent[0].body.endsWith("second"));
   });
 });
 
@@ -196,7 +193,24 @@ describe("room context given to the agent", () => {
     assert.match(first, /!theroom:example\.org/, "the first prompt names the room");
     assert.ok(first.endsWith("first"), "the user's text is preserved at the end");
 
-    assert.equal(second, "second", "later prompts carry no preamble");
+    assert.doesNotMatch(second, /!theroom:example\.org/, "the room is said once, not every turn");
+    assert.ok(second.endsWith("second"));
+  });
+
+  it("names the sender on every ordinary message", async () => {
+    // It changes between turns and the agent can see it no other way. Told
+    // nothing, it filled the gap with whoever it had spoken to last.
+    const session = makeFakeSession();
+    const client = makeFakeClient();
+    const roomId = "!r:example.org";
+    const mgr = makeManager(session);
+
+    await mgr.handleMessage({ roomId, text: "one", sender: "@agu:example.org", client });
+    await mgr.handleMessage({ roomId, text: "two", sender: "@other:example.org", client });
+
+    const [first, second] = session.promptsRun;
+    assert.match(first, /from @agu:example\.org/);
+    assert.match(second, /from @other:example\.org/, "a different sender on a later turn is not lost");
   });
 
   it("carries only the room id, not the standing instructions", async () => {

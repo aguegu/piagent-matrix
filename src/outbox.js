@@ -96,7 +96,7 @@ export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } =
           }
           if (!body.trim()) throw new Error("empty body");
 
-          const content = { msgtype: "m.text", body };
+          const content = { msgtype: "m.notice", body };
           if (html) {
             content.format = "org.matrix.custom.html";
             content.formatted_body = html;
