@@ -396,6 +396,50 @@ that it is the bot's control channel.
 The main room is read per send rather than captured at startup, so a room
 adopted later takes effect immediately.
 
+## More than one bot in a room
+
+Two of these can share a room and talk to each other. That is deliberate, and it
+took two tries to get right.
+
+Matrix distinguishes `m.text`, which a person sends, from `m.notice`, which an
+automated client sends. Clients render notices differently — muted, in Element —
+and bots are conventionally expected to ignore them, so that two machines do not
+answer each other forever. This bot **sends** notices, so a well-behaved
+counterpart is not drawn in, and also **accepts** them, so agents that are meant
+to talk can.
+
+Accepting them is the second try. Ignoring notices did stop a runaway, and also
+left two agents sitting in a room unable to hear each other at all — which is
+not what anyone wanted from them.
+
+**Deciding when an exchange is finished is the agent's job**, and it does it
+well: `AGENTS.md` says silence is a reply, and once that rule existed one bot
+went quiet after two turns without being made deaf. What bounds it is a counter,
+for the case where judgement fails:
+
+| | |
+| --- | --- |
+| Limit | three consecutive automated messages in one room |
+| Reset | any message from a person |
+| Scope | per room, per process — a restart forgets it |
+
+Before that rule existed the same pair ran **59 turns**, each running shell
+commands on the other's output with nobody in the room. A different model, or a
+prompt that nudges it, will do that again; the counter is what makes the cost
+bounded rather than open-ended. The agent is told the limit exists, so ending a
+conversation stays its job rather than the counter's.
+
+The log marks which is which, so a transcript can be read back:
+
+```
+< [e2ee] [bot] @bk15pi:matrix.example.org: "..."   counted toward the limit
+< [e2ee] @agu:matrix.example.org: "..."            a person; resets it
+```
+
+None of this is access control. `m.notice` is a convention a hostile or careless
+bot can ignore, and the counter bounds a runaway rather than preventing one —
+`MATRIX_ALLOWED_USERS` is what decides who may drive the agent at all.
+
 ## Extending the agent
 
 Everything pi loads — extensions, skills, context files, settings — comes from
@@ -684,6 +728,7 @@ src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
 src/resources.js        installs agent/ into PI_AGENT_DIR on start
 src/version.js          which build this is, for .info and the startup log
+src/loop-guard.js       bounds a run of bots answering bots
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 agent/AGENTS.md         standing instructions that ship with the bot
 scripts/cross-sign.js   provisioning, matrix-js-sdk only
@@ -742,6 +787,8 @@ directory, and consider passing an explicit `tools` allowlist to
 - The `M_NOT_FOUND` log filter drops *every* such error from `MatrixHttpClient`,
   not just the expected encryption-state probe.
 - Sessions are never evicted from memory; the map only grows.
+- The bot-to-bot limit is per process: restarting clears the counters, so a pair
+  mid-runaway resumes with a fresh allowance.
 - `BOT_CWD` in the committed `.env` is an absolute path from one machine.
 - `matrix-bot-sdk` depends on the deprecated `request`, which carries
   unpatchable advisories including a critical one in `form-data`. Practical
