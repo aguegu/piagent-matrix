@@ -414,10 +414,13 @@ On startup the bot logs what loaded, and says so when one fails:
 
 ### Prompt templates
 
-Drop `<name>.md` in `data/pi/prompts/` and it runs as `/<name>` in any room —
-and as a bot command once its name is added to `COMMANDS` in `src/commands.js`,
-which is how `.verify` works. These belong to the deployment, and the bot never
-touches them.
+Drop `<name>.md` in `data/pi/prompts/` and it runs as `/<name>` in any room.
+These belong to the deployment; the bot never touches them and ships none.
+
+Adding the name to `COMMANDS` in `src/commands.js` also gives it a `.` alias,
+which is worth doing only because Element eats a leading `/`. Nothing does this
+today: the bot shipped a `.verify` for a template pi had written for itself,
+which meant advertising a command that did nothing on any other install.
 
 ### Skills
 
@@ -484,7 +487,6 @@ belong to the main room** — see below.
 | Command | Where | What it does |
 | --- | --- | --- |
 | `.info` | any room | Shows the model and thinking level in use |
-| `.verify` | main room | pi's `/verify` — its own verify-first checklist |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -498,10 +500,10 @@ still accepted for clients that pass it through, but `.` is the reliable form.
 ### The main room holds the controls
 
 Every command but `.info` either reconfigures the bot for *all* rooms
-(`.model`, `.thinking`, `.reload`) or hands a chat message the agent's own reach
-(`.verify`). One agent config backs every room, so a switch made in a working
-room would reconfigure the others without their knowing, and only the room that
-did it would see the confirmation. That belongs in the bot's control channel.
+(`.model`, `.thinking`, `.reload`) or reports on it (`.rooms`, `.help`). One
+agent config backs every room, so a switch made in a working room would
+reconfigure the others without their knowing, and only the room that did it
+would see the confirmation. That belongs in the bot's control channel.
 
 A working room may hold people who are not the bot's admin, so it gets `.info`
 and nothing else. Anything else there is answered with a flat
@@ -519,14 +521,6 @@ the thinking level. It reads; it changes nothing. Deliberately no caveat about
 whether the room has a live session — sessions are in-memory, so a room chatted
 in for days would report none after a restart, and the values are the same
 either way.
-
-`.verify` is not special-cased: the bot hands `/verify` straight to pi, which
-expands its own prompt template and runs the agent, so the reply arrives like
-any other. The template is pi's, not the bot's — it lives in
-`PI_AGENT_DIR/prompts` and is not shipped here, so `.verify` does nothing on a
-deployment where pi has not got one. Any prompt template in that directory works
-the same way once its name is added to `COMMANDS` in `src/commands.js`; the
-alias exists because Element eats a leading `/`.
 
 `.reload` calls `AgentSession.reload()` on every live session, not just the room
 that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so

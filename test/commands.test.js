@@ -6,19 +6,19 @@ describe("command parsing", () => {
   it("accepts both prefixes", () => {
     // Element intercepts a leading "/" for its own commands, so "." is the
     // reliable form; "/" is honoured for clients that pass it through.
-    assert.deepEqual(parseCommand("/verify"), { name: "verify", args: "" });
-    assert.deepEqual(parseCommand(".verify"), { name: "verify", args: "" });
+    assert.deepEqual(parseCommand("/reload"), { name: "reload", args: "" });
+    assert.deepEqual(parseCommand(".reload"), { name: "reload", args: "" });
   });
 
   it("carries arguments through", () => {
-    assert.deepEqual(parseCommand("/verify the outbox claim"), {
-      name: "verify",
-      args: "the outbox claim",
+    assert.deepEqual(parseCommand("/model anthropic/claude-opus-4-5"), {
+      name: "model",
+      args: "anthropic/claude-opus-4-5",
     });
   });
 
   it("is case-insensitive and tolerates leading space", () => {
-    assert.equal(parseCommand("  /Verify")?.name, "verify");
+    assert.equal(parseCommand("  /Rooms")?.name, "rooms");
     assert.equal(parseCommand("/RELOAD")?.name, "reload");
   });
 
@@ -41,8 +41,8 @@ describe("command parsing", () => {
 
   it("does not eat a message that merely begins with a slash", () => {
     assert.equal(parseCommand("/home/agu/notes.md — have a look"), null);
-    assert.equal(parseCommand("/verifying something by hand"), null, "needs a word boundary");
-    assert.equal(parseCommand("look at ./verify.md"), null, "only at the start");
+    assert.equal(parseCommand("/reloading the page by hand"), null, "needs a word boundary");
+    assert.equal(parseCommand("look at ./rooms.md"), null, "only at the start");
   });
 
   it("returns null for non-strings and empty input", () => {
@@ -63,8 +63,8 @@ describe("which room may run a command", () => {
   });
 
   it("gives a working room .info and nothing else", () => {
-    // Every other command either reconfigures the bot for all rooms or hands a
-    // chat message the agent's own reach; both belong in the control channel.
+    // Every other command either reconfigures the bot for all rooms or reports
+    // on it; both belong in the control channel.
     assert.equal(mayCommand("info", WORK, MAIN), true);
     for (const name of Object.keys(COMMANDS).filter((n) => n !== "info")) {
       assert.equal(mayCommand(name, WORK, MAIN), false, `${name} must not work in a working room`);
@@ -97,7 +97,7 @@ describe("help output", () => {
     // Element intercepts a leading "/", so telling someone to type /help sends
     // them to Element's help instead of the bot.
     const text = helpText({ prompts: ["verify"], skills: ["review"] });
-    assert.doesNotMatch(text, /`\/(info|verify|reload|model|thinking|help)/, "no /command in the help output");
+    assert.doesNotMatch(text, /`\/(info|reload|rooms|model|thinking|help)/, "no /command in the help output");
   });
 
   it("names the installed prompts and skills when there are any", () => {

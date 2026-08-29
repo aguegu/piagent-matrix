@@ -376,9 +376,13 @@ async function runCommand(command, { agent, client, roomId, sender }) {
     return;
   }
 
-  // Everything else is a pi prompt template. Hand it over with the leading
-  // slash intact; pi expands it and runs the agent, so the reply arrives the
-  // usual way.
+  // Everything else is a pi prompt template: handed over with the leading slash
+  // intact, for pi to expand and run, so the reply arrives the usual way.
+  //
+  // Nothing reaches here today — every command above is handled. It stays as
+  // the extension point: adding a template's name to COMMANDS gives it a `.`
+  // alias, which matters only because Element eats a leading `/`. Typing
+  // `/name` works without any of this in a client that passes it through.
   await agent.handleMessage({
     roomId,
     text: `/${command.name}${command.args ? ` ${command.args}` : ""}`,

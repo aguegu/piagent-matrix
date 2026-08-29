@@ -12,11 +12,11 @@
 // that pass it through.
 //
 // Commands belong to the main room. Every one of them either reconfigures the
-// bot for all rooms (`.model`, `.thinking`, `.reload`) or hands a chat message
-// the agent's own reach (`.verify`), so the bot's control channel is where they
-// go. A working room may hold people who are not the bot's admin. It gets
-// `.info` and nothing else — and the refusals say nothing about why, or about a
-// main room, so the control channel's existence stays where it belongs.
+// bot for all rooms (`.model`, `.thinking`, `.reload`) or reports on it
+// (`.rooms`, `.help`), so the bot's control channel is where they go. A working
+// room may hold people who are not the bot's admin. It gets `.info` and nothing
+// else — and the refusals say nothing about why, or about a main room, so the
+// control channel's existence stays where it belongs.
 
 /**
  * Commands the bot answers to, and what each is for.
@@ -25,7 +25,6 @@
  */
 export const COMMANDS = {
   info: { what: "Show the model and thinking level in use", everywhere: true },
-  verify: { what: "pi's /verify — its own verify-first checklist" },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
   rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>` leaves one" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },
