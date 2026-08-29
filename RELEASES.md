@@ -1,11 +1,5 @@
 # Releases
 
-## 0.2.3 (in progress)
-
-### New Features
-
-* `.info` and the startup log name the build — `piagent-matrix 0.2.2 (39bbb25)`. The version alone could not answer the question that kept coming up, since `package.json` is bumped once when a release opens and every host between two releases reports the same number while running different code. The commit is read from `.git` rather than by running git, so there is no subprocess at startup; a deployment without a checkout reports the version alone, and a worktree or submodule — where `.git` is a file pointing elsewhere — is followed. It is read once at startup rather than per `.info`, so a host pulled but not restarted reports the code it is running rather than the code on disk
-
 ## 0.2.2 (2026-08-29)
 
 The agent learns what it is, who it is, and who is talking to it. Almost all of
@@ -34,6 +28,7 @@ in a room together.
 
 ### Improvements
 
+* `.info` and the startup log name the build — `piagent-matrix 0.2.2 (b15ea83)`, and `.info` also gives when the process started and how long it has been up. The version alone could not answer the question that kept coming up, since `package.json` is bumped once when a release opens and every host between two releases reports the same number while running different code. The commit is read from `.git` rather than by running git, so there is no subprocess at startup; a deployment without a checkout reports the version alone, and a worktree or submodule — where `.git` is a file pointing elsewhere — is followed. It is read once at startup rather than per `.info`, so a host pulled but not restarted reports the code it is running rather than the code on disk. What it cannot see is a tree edited in place
 * The agent is told its **name** — the localpart of its user id, so `@bk18pi:example.org` is `bk18pi` — and to introduce itself by it. It had been answering "I'm a coding agent — pi — reached over Matrix", which is the category rather than the individual, and was equally true of the other bot in the room
 * It is told its **user id and working directory**. The id comes from `client.getUserId()` rather than `MATRIX_USER_ID`: the server's answer for the token in use, which is the one that differs when credentials have been swapped without swapping `data/token.json`
 * The first message in a room **names the room** — `Matrix room "Ops" (!r:example.org)` — with a note that a room can be renamed and an id cannot. The name is fetched once per session and flattened first: whoever made the room chose it and it lands inside the `[context]` block, so brackets are stripped and whitespace collapsed, or a name could forge the end of that block and have what follows read as instruction

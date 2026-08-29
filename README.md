@@ -524,7 +524,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model, thinking level and build in use |
+| `.info` | any room | Shows the model, thinking level, build and uptime |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -555,8 +555,12 @@ bot with one usable command.
 ### What each one does
 
 `.info` is the whole command surface of a working room: the model, the thinking
-level, and the build — `piagent-matrix 0.2.2 (39bbb25)`. It reads; it changes
-nothing.
+level, the build — `piagent-matrix 0.2.2 (b15ea83)` — and when the process
+started, with how long it has been up. It reads; it changes nothing.
+
+The uptime is computed per call, unlike the build: the point of it is that it
+moves. Between them they answer the two questions asked of a deployment — which
+code is this, and did it actually restart when I restarted it.
 
 The commit is there because the version cannot answer the question people
 actually ask. `package.json` is bumped once when a release opens, so every host

@@ -30,7 +30,7 @@ import { startOutbox } from "./outbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
-import { BUILD } from "./version.js";
+import { BUILD, describeStart } from "./version.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -251,6 +251,7 @@ async function runCommand(command, { agent, client, roomId, sender }) {
         `Model: \`${model.current}\``,
         `Thinking: \`${thinking.current}\``,
         `Build: \`${BUILD}\``,
+        `Started: \`${describeStart()}\``,
       ].join("\n"),
     ));
     return;

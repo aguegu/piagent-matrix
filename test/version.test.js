@@ -3,7 +3,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describeBuild, readCommit, readVersion } from "../src/version.js";
+import { describeBuild, describeStart, readCommit, readVersion } from "../src/version.js";
 
 describe("naming the build", () => {
   let root;
@@ -67,5 +67,29 @@ describe("naming the build", () => {
     rmSync(join(root, "package.json"));
     assert.equal(readVersion(root), "");
     assert.equal(describeBuild(root), "piagent-matrix");
+  });
+});
+
+describe("saying how long it has been up", () => {
+  const at = (iso, uptime) => describeStart(Date.parse(iso), uptime);
+
+  it("gives the moment it started, derived from uptime", () => {
+    // From process.uptime(), not a timestamp taken at import, so it is the
+    // process that is being described rather than the module.
+    assert.match(at("2026-08-29T12:47:07Z", 8047), /^2026-08-29 10:33:00Z/);
+  });
+
+  it("reports elapsed time to the coarsest useful pair", () => {
+    assert.match(at("2026-08-29T12:47:07Z", 8047), /\(up 2h 14m\)$/);
+    assert.match(at("2026-08-29T12:47:07Z", 3 * 86400 + 7200), /\(up 3d 2h\)$/);
+    assert.match(at("2026-08-29T12:47:07Z", 900), /\(up 15m\)$/);
+    assert.match(at("2026-08-29T12:47:07Z", 40), /\(up 40s\)$/);
+  });
+
+  it("moves, unlike the build", async () => {
+    // The value is that it changes; it must not be frozen at import.
+    const first = describeStart(Date.now(), 10);
+    const later = describeStart(Date.now(), 20);
+    assert.notEqual(first, later);
   });
 });

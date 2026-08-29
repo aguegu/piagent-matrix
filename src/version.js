@@ -1,4 +1,4 @@
-// What build is this.
+// What build is this, and how long has it been running.
 //
 // The version alone does not answer it. package.json is bumped once when a
 // release opens, so every host between two releases reports the same number
@@ -93,3 +93,29 @@ export function describeBuild(root = ROOT) {
  * not proof that the files match it.
  */
 export const BUILD = describeBuild();
+
+/** "2h 14m", to the coarsest useful pair of units. */
+function humaniseUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m`;
+  return `${Math.floor(seconds)}s`;
+}
+
+/**
+ * When this process started, and how long ago.
+ *
+ * Derived from process.uptime() rather than a timestamp taken at import, so it
+ * is the process rather than this module — and it must be computed per call,
+ * unlike BUILD, since the whole value is that it moves.
+ *
+ * The absolute time answers "did it restart when I restarted it"; the elapsed
+ * answers "has it been up since" without the reader doing arithmetic.
+ */
+export function describeStart(now = Date.now(), uptimeSeconds = process.uptime()) {
+  const started = new Date(now - uptimeSeconds * 1000);
+  return `${started.toISOString().replace("T", " ").slice(0, 19)}Z (up ${humaniseUptime(uptimeSeconds)})`;
+}
