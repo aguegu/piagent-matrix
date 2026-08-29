@@ -524,7 +524,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model and thinking level in use |
+| `.info` | any room | Shows the model, thinking level and build in use |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -554,8 +554,17 @@ bot with one usable command.
 
 ### What each one does
 
-`.info` is the whole command surface of a working room: two lines, the model and
-the thinking level. It reads; it changes nothing. Deliberately no caveat about
+`.info` is the whole command surface of a working room: the model, the thinking
+level, and the build — `piagent-matrix 0.2.2 (39bbb25)`. It reads; it changes
+nothing.
+
+The commit is there because the version cannot answer the question people
+actually ask. `package.json` is bumped once when a release opens, so every host
+between two releases reports the same number while running different code, and
+"has this one been upgraded yet?" stays unanswerable. It is read from `.git`
+rather than by running git, so there is no subprocess at startup; a deployment
+without a checkout reports the version alone. The same line opens the startup
+log. Deliberately no caveat about
 whether the room has a live session — sessions are in-memory, so a room chatted
 in for days would report none after a restart, and the values are the same
 either way.
@@ -660,6 +669,7 @@ src/main-room.js        adopting, verifying and dropping the control channel
 src/markdown.js         markdown -> sanitized HTML for formatted_body
 src/outbox.js           spool watcher for other processes
 src/resources.js        installs agent/ into PI_AGENT_DIR on start
+src/version.js          which build this is, for .info and the startup log
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 agent/AGENTS.md         standing instructions that ship with the bot
 scripts/cross-sign.js   provisioning, matrix-js-sdk only

@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.3 (in progress)
+
+### New Features
+
+* `.info` and the startup log name the build — `piagent-matrix 0.2.2 (39bbb25)`. The version alone could not answer the question that kept coming up, since `package.json` is bumped once when a release opens and every host between two releases reports the same number while running different code. The commit is read from `.git` rather than by running git, so there is no subprocess at startup; a deployment without a checkout reports the version alone
+
 ## 0.2.2 (2026-08-29)
 
 The agent learns what it is, who it is, and who is talking to it. Almost all of

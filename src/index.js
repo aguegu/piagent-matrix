@@ -30,6 +30,7 @@ import { startOutbox } from "./outbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
+import { describeBuild } from "./version.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -246,7 +247,11 @@ async function runCommand(command, { agent, client, roomId, sender }) {
       agent.describeThinking(roomId),
     ]);
     await client.sendMessage(roomId, htmlMessage(
-      `Model: \`${model.current}\`\nThinking: \`${thinking.current}\``,
+      [
+        `Model: \`${model.current}\``,
+        `Thinking: \`${thinking.current}\``,
+        `Build: \`${describeBuild()}\``,
+      ].join("\n"),
     ));
     return;
   }
@@ -680,7 +685,10 @@ async function main() {
   await client.start();
 
   const joined = await client.getJoinedRooms();
-  LogService.info("bot", `Started. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`);
+  LogService.info(
+    "bot",
+    `Started ${describeBuild()}. Crypto ready=${client.crypto?.isReady}. Rooms: ${joined.length}`,
+  );
   for (const roomId of joined) LogService.info("bot", `  ${roomId}`);
 
   LogService.info("bot", mainRoom.describe());

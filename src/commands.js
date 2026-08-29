@@ -24,7 +24,7 @@
  * `everywhere` marks the ones a room other than the main room may use.
  */
 export const COMMANDS = {
-  info: { what: "Show the model and thinking level in use", everywhere: true },
+  info: { what: "Show the model, thinking level and build in use", everywhere: true },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
   rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>` leaves one" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },
