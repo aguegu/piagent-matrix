@@ -461,7 +461,12 @@ posted whole and never edited afterwards, which commands the bot handles before
 the agent sees them, and that it has no Matrix client of its own. Without it an
 agent answers "who are you" as whatever a coding agent assumes by default. It
 also points at `data/main-room.json`, so the answer names the real main room and
-admin instead of being invented.
+admin instead of being invented, and carries the outbox protocol, so a session
+that opens with a command still knows how to send something later.
+
+The per-room briefing on the first ordinary message is now just the room id —
+the one fact that differs per room. Everything standing lives here instead, in
+one copy.
 
 This is a context file rather than a command on purpose. "Who are you" is a
 thing people ask in ordinary conversation, and a `.whoami` would only have

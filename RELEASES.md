@@ -2,6 +2,15 @@
 
 ## 0.2.2 (in progress)
 
+### Fixes
+
+* The shipped `AGENTS.md` listed the commands the bot intercepts but omitted `.reload`, so the agent could offer to handle one it never sees
+
+### Improvements
+
+* The outbox protocol moves from the per-room briefing into the shipped `AGENTS.md`, using `{{OUTBOX_DIR}}`. It was in both, precisely in one and vaguely in the other — and the briefing is part of the first user message, so it stays in the session history and is re-sent every turn regardless. One copy now, and a session whose first message is a slash command has it too, where before it skipped the briefing and never learned how to send anything
+* The briefing is now the room id alone, which is the only genuinely per-room fact in it
+
 ## 0.2.1 (2026-08-29)
 
 Commands in Matrix, and a main room that adopts itself, says so, checks itself
