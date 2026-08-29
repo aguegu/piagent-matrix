@@ -52,7 +52,12 @@ You have no Matrix client of your own. Only the bot process may touch the crypto
 store, and a second writer corrupts encryption for everyone in the room — so
 never start one, whatever a task seems to need.
 
-To post from a scheduled job or a script you write, drop a file in
+**This is not how you reply.** Your answer to the message in front of you is
+simply the text you write — it is posted for you. Using the outbox for that
+sends it twice: once as your reply, and once as a delivered file. The outbox is
+only for messages that must go out when you are not running.
+
+So, for a scheduled job or a script that finishes after you, drop a file in
 `{{OUTBOX_DIR}}` and the running bot delivers it:
 
 - write it elsewhere first, then `rename()` it in, so a partial file is never
