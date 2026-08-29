@@ -1,23 +1,49 @@
 # Releases
 
-## 0.2.2 (in progress)
+## 0.2.2 (2026-08-29)
+
+The agent learns what it is, who it is, and who is talking to it. Almost all of
+it was found by emptying `MATRIX_ALLOWED_USERS` and watching two bots left alone
+in a room together.
+
+### Breaking Changes
+
+* **Everything the bot sends is now `m.notice`**, where it was `m.text`. Clients
+  render notices differently — muted, in Element — so every message the bot
+  posts changes appearance, and anything downstream matching on `m.text` stops
+  matching. The reason is that the bot also *accepts* `m.text`: with the
+  allowlist empty, two instances in one room each treated the other's output as
+  a prompt and answered each other for 59 turns, running shell commands on it.
+  A notice marks a message as coming from an automated client, and bots are
+  expected to ignore them; this bot already ignored anything that was not
+  `m.text`, so the pair is closed from both ends. It is a convention, not a
+  guarantee — the allowlist is still what decides who may drive the agent
 
 ### Fixes
 
-* **Two bots in one room answered each other indefinitely.** Replies went out as `m.text`, which the bot also accepts, so with `MATRIX_ALLOWED_USERS` empty each instance treated the other's output as a prompt — 59 turns before anyone looked. Everything the bot sends is now `m.notice`, which automated clients are expected to ignore and which this bot already ignored, so the pair is closed
-* The main room's **admin** is now whoever invited the bot into it, rather than whichever member is not the bot. With `MATRIX_ALLOWED_USERS` empty the old rule had nothing to go on — everyone is allowed, so the other member is merely the other member — and in a room holding two bots it would have recorded one as the other's admin. The invite is a fact the bot observed; the allowlisted member remains the fallback for a room adopted at startup, and with neither, no admin is recorded
-* The first message in a room now names it — `Matrix room "Ops" (!r:example.org)` — with a note that a room can be renamed and an id cannot, so anything addressed is addressed by id. The name is fetched once per session, and flattened first: whoever made the room chose it and it lands inside the `[context]` block, so brackets are stripped and whitespace collapsed, or a name could forge the end of that block and have what follows read as instruction
-* **The agent was never told who was speaking.** The sender reached `#runPrompt` and went into a log line and nowhere else, so asked whether a message came from another bot it answered "still `@aguegu` on my side" three times, having been given nothing either way. Ordinary messages now carry `This message is from <sender>`, on every turn because it changes between turns. A turn beginning with `/` still carries no context — a prefix would stop pi expanding the template — so `AGENTS.md` tells the agent it is sometimes not told, and never to name a sender it was not given
+* **The agent was never told who was speaking.** The sender reached `#runPrompt`, went into a log line, and stopped there — so asked whether a message came from another bot it answered "still `@aguegu` on my side" three times, having been given nothing either way. Ordinary messages now carry `This message is from <sender>`, on every turn because it changes between turns
+* **The main room's admin was inferred from the membership.** It was "the member who is not the bot", which is only sound while `MATRIX_ALLOWED_USERS` says who counts; empty, that member is merely the other member, and in a room holding two bots it would have recorded one as the other's admin. It is now whoever invited the bot into the room that became the control channel — a fact the bot observed. The allowlisted member is the fallback for a room adopted at startup where no invite was seen, and with neither, nothing is recorded
+* **The agent used the outbox to reply**, answering one question twice: once as a delivered file, once as its own reply carrying the tool lines that showed it writing the file. `AGENTS.md` described the outbox as the way to post from a script and never said it was not the way to answer
 * The shipped `AGENTS.md` listed the commands the bot intercepts but omitted `.reload`, so the agent could offer to handle one it never sees
 
 ### Improvements
 
-* **Silence is a reply.** Not every message needs an answer — people talk to each other in these rooms, and another bot may be talking too. To say nothing the agent answers with a single `.`, which the bot drops. Asking for "no text at all" first did not work: a model has to end its turn somehow, and one ran `bash true` twice looking for a way to do nothing before sending `.` anyway — which reached the room, because `.` is not empty
-* The agent is told its **name** — the localpart of its user id, so `@bk18pi:example.org` is `bk18pi` — and to introduce itself by it. It had been answering "I'm a coding agent — pi — reached over Matrix", which describes the category and not the individual, and does not distinguish it from the other bot in the room. Given rather than derived, so an introduction does not depend on the agent taking a user id apart correctly
-* The agent is told its own Matrix user id and working directory. It had neither, so it could not say who it was on Matrix, and could not tell itself apart from the people in a room whose membership it had just read. The id comes from `client.getUserId()` rather than `MATRIX_USER_ID` — the server's answer for the token in use, which is the one that differs when credentials have been swapped without swapping `data/token.json`
-* Installing warns about a `{{PLACEHOLDER}}` nothing supplies, and reports it. Substitution leaves an unknown name in place, which beats blanking it — an emptied path reads as a working instruction — but a typo would otherwise have shipped the agent an instruction to look in a directory called `{{DATA_DIR}}`
-* The outbox protocol moves from the per-room briefing into the shipped `AGENTS.md`, using `{{OUTBOX_DIR}}`. It was in both, precisely in one and vaguely in the other — and the briefing is part of the first user message, so it stays in the session history and is re-sent every turn regardless. One copy now, and a session whose first message is a slash command has it too, where before it skipped the briefing and never learned how to send anything
-* The briefing is now the room id alone, which is the only genuinely per-room fact in it
+* The agent is told its **name** — the localpart of its user id, so `@bk18pi:example.org` is `bk18pi` — and to introduce itself by it. It had been answering "I'm a coding agent — pi — reached over Matrix", which is the category rather than the individual, and was equally true of the other bot in the room
+* It is told its **user id and working directory**. The id comes from `client.getUserId()` rather than `MATRIX_USER_ID`: the server's answer for the token in use, which is the one that differs when credentials have been swapped without swapping `data/token.json`
+* The first message in a room **names the room** — `Matrix room "Ops" (!r:example.org)` — with a note that a room can be renamed and an id cannot. The name is fetched once per session and flattened first: whoever made the room chose it and it lands inside the `[context]` block, so brackets are stripped and whitespace collapsed, or a name could forge the end of that block and have what follows read as instruction
+* **Silence is a reply.** To say nothing the agent answers with a single `.`, which the bot drops. Asking for "no text at all" did not work — a model has to end its turn somehow, and one ran `bash true` twice looking for a way to do nothing before sending `.` anyway, which reached the room because `.` is not empty
+* **No narrating work the room already watched.** Every tool call is rendered into the reply with a tick when it succeeds, so "Done! Message sent." after each one repeats the screen back at the person
+* Installing warns about a `{{PLACEHOLDER}}` nothing supplies, and reports it. Substitution leaves an unknown name in place, which beats blanking it — an emptied path reads as a working instruction — but a typo would otherwise have shipped an instruction to look in a directory called `{{DATA_DIR}}`
+* The outbox protocol moved from the per-room briefing into `AGENTS.md`, using `{{OUTBOX_DIR}}`. It was in both, precisely in one and vaguely in the other, and the briefing is part of the first user message, so it sits in the session history and is re-sent every turn regardless. One copy now — and a session opening with a slash command has it, where before it skipped the briefing entirely
+
+### Documentation
+
+* `SECURITY.md` and the committed `.env` say what an empty `MATRIX_ALLOWED_USERS` actually means: not only that anyone may run shell commands through the bot, but that another bot can drive it unattended
+* `docs/pi-integration.md`: `agentDir` does not reach extensions, which is why the bot exports `PI_CODING_AGENT_DIR`; and prompt templates are not context — they load from `agentDir/prompts` and `$cwd/.pi/prompts` and expand only on a leading `/<name>`, which is the argument for keeping `AGENTS.md` short
+
+### Tests
+
+* 99 tests, up from 85: what makes a room fit and who its admin is, the sender on every turn, the room name and a name attempting to forge the end of the context block, silence and a reply that merely ends in a full stop, and a placeholder nothing supplies
 
 ## 0.2.1 (2026-08-29)
 

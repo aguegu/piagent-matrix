@@ -467,15 +467,28 @@ to keep context there.
 client rather than a terminal, its name and user id and working directory, one
 session per room, one run at a time, answers posted whole and never edited
 afterwards, which commands the bot handles before the agent sees them, and that
-it has no Matrix client of its own. Without it an
-agent answers "who are you" as whatever a coding agent assumes by default. It
-also points at `data/main-room.json`, so the answer names the real main room and
-admin instead of being invented, and carries the outbox protocol, so a session
-that opens with a command still knows how to send something later.
+it has no Matrix client of its own. Without it an agent answers "who are you" as
+whatever a coding agent assumes by default. It also points at
+`data/main-room.json`, so the answer names the real main room and admin instead
+of being invented, and carries the outbox protocol — including that the outbox
+is not how it replies, which cost one double-posted answer to learn.
 
-The per-room briefing on the first ordinary message is now just the room id —
-the one fact that differs per room. Everything standing lives here instead, in
-one copy.
+Two rules there exist because their absence produced something worse:
+
+- **Silence is answering with a single `.`**, which the bot drops. Asked for
+  "no text at all" the agent ran `bash true` twice hunting for an action that
+  does nothing, then sent `.` anyway — and `.` reached the room, because it is
+  not empty.
+- **Do not narrate what the room already watched.** Every tool call is rendered
+  into the reply with a tick when it succeeds, so "Done! Message sent." repeats
+  the screen back at the person.
+
+Anything that differs per room or per message goes in a `[context]` block in
+front of the message instead: who sent it, on every turn because it changes
+between turns, and the room's name and id on the first turn of a session. A
+message beginning with `/` carries no block at all — a prefix would stop pi
+expanding the template — which is why `AGENTS.md` tells the agent it is
+sometimes not told the sender, and never to guess one.
 
 This is a context file rather than a command on purpose. "Who are you" is a
 thing people ask in ordinary conversation, and a `.whoami` would only have
