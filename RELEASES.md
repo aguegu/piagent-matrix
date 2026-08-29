@@ -21,6 +21,7 @@ in a room together.
   one went quiet after two turns without being made deaf to the other. But
   judgement is a disposition rather than a limit, and the 59 turns are what its
   absence looks like, so the limit is there for the case where it fails
+* Silence is scoped to messages that are *not for you*. The rule said to answer "when you have something to add", which is a judgement about content — and small talk contains nothing to add, so an agent greeted by name six times running answered `.` to all of them and posted nothing. Being addressed is now the test rather than having something to contribute: a greeting, a question or your name gets an answer, whoever is asking; two other participants talking to each other does not
 * What the limit withholds is still heard. Not answering is the point; not
   hearing would leave the agent with a hole in the conversation that everyone
   else in the room saw, so asked later what was decided it could neither say nor
