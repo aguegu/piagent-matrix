@@ -22,6 +22,21 @@ Consequences worth being explicit about:
 - **`MATRIX_ALLOWED_USERS` is the only access control.** Leaving it empty means
   *everyone* who can reach the bot is allowed; the bot warns on every message
   when this happens. Set it.
+- **Anyone can arrange to reach it: the bot autojoins every invite.**
+  `AutojoinRoomsMixin` is set up unconditionally, and the allowlist is checked
+  on messages, not on invites. So "anyone who can send it a message" means
+  anyone who knows its user id — they invite it, it joins, and with the
+  allowlist empty it does as it is told. On a federated homeserver that is not
+  limited to your server. The bot's own secrets are readable by the agent (see
+  below), so an empty allowlist puts the Matrix access token, the recovery key
+  and the model provider credential one message away from a stranger.
+- **An empty allowlist can also lose the main room.** A room is adopted when
+  none is recorded and the room fits, and *fits* means an allowlisted member is
+  present — except with no allowlist, where any room holding the bot and one
+  other party qualifies. So on a fresh install the first person to invite the
+  bot takes its control channel and is recorded as its admin, which is where
+  commands run and where operational output goes. With the allowlist set, a
+  stranger's room does not fit and cannot be adopted.
 - **Empty also means every *bot*.** Two agents left in one room with no
   allowlist will answer each other with nobody present — observed here for 59
   turns, each running shell commands and spending tokens on the other's output.

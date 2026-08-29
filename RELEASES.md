@@ -38,7 +38,7 @@ in a room together.
 
 ### Documentation
 
-* `SECURITY.md` and the committed `.env` say what an empty `MATRIX_ALLOWED_USERS` actually means: not only that anyone may run shell commands through the bot, but that another bot can drive it unattended
+* `SECURITY.md` and the committed `.env` say what an empty `MATRIX_ALLOWED_USERS` actually means. Not only that anyone may run shell commands through the bot, but that another bot can drive it unattended; that the bot **autojoins every invite** — the allowlist is checked on messages, not on invites — so anyone who knows its user id can put it in a room and be that anyone, federation included; and that a room only *fits* to be adopted as the main room because an allowlisted member is in it, so with no allowlist the first stranger to invite a fresh bot takes its control channel and is recorded as its admin
 * `docs/pi-integration.md`: `agentDir` does not reach extensions, which is why the bot exports `PI_CODING_AGENT_DIR`; and prompt templates are not context — they load from `agentDir/prompts` and `$cwd/.pi/prompts` and expand only on a leading `/<name>`, which is the argument for keeping `AGENTS.md` short
 
 ### Tests
