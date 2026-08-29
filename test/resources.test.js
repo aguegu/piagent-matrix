@@ -52,7 +52,7 @@ describe("installing the bot's standing instructions", () => {
     ship("same");
     installAgentResources(agentDir, {}, from);
     assert.deepEqual(installAgentResources(agentDir, {}, from),
-      { written: [], skipped: ["AGENTS.md"], kept: [] });
+      { written: [], skipped: ["AGENTS.md"], kept: [], unresolved: [] });
   });
 
   it("overwrites its own copy, since the repo is the source", () => {
@@ -72,7 +72,7 @@ describe("installing the bot's standing instructions", () => {
 
     const r = installAgentResources(agentDir, {}, from);
 
-    assert.deepEqual(r, { written: [], skipped: [], kept: ["AGENTS.md"] });
+    assert.deepEqual(r, { written: [], skipped: [], kept: ["AGENTS.md"], unresolved: [] });
     assert.equal(readFileSync(target(), "utf8"), "# my own instructions");
   });
 
@@ -84,7 +84,25 @@ describe("installing the bot's standing instructions", () => {
   it("warns rather than throwing when there is nothing to install from", () => {
     // A bot that cannot write its context file still answers messages.
     assert.deepEqual(installAgentResources(agentDir, {}, join(from, "missing")),
-      { written: [], skipped: [], kept: [] });
+      { written: [], skipped: [], kept: [], unresolved: [] });
+  });
+
+  it("reports a placeholder nothing supplies, rather than shipping it quietly", () => {
+    // Left in rather than blanked — an empty path reads as a real instruction
+    // — but the agent would otherwise be told to look in "{{DATA_DIR}}".
+    ship("read {{DATA_DIR}}/x and {{NOPE}}/y");
+
+    const r = installAgentResources(agentDir, { DATA_DIR: "/d" }, from);
+
+    assert.deepEqual(r.unresolved, ["NOPE"]);
+    assert.match(readFileSync(target(), "utf8"), /\{\{NOPE\}\}/, "and it is still visible in the file");
+  });
+
+  it("ships an AGENTS.md whose placeholders are all supplied at startup", () => {
+    // Guards the pairing between agent/*.md and the values index.js passes.
+    const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
+    const used = [...new Set([...shipped.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].sort();
+    assert.deepEqual(used, ["BOT_CWD", "DATA_DIR", "MATRIX_USER_ID", "OUTBOX_DIR"]);
   });
 
   it("ships an AGENTS.md that tells the agent where its record is", () => {

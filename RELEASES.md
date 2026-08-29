@@ -8,6 +8,8 @@
 
 ### Improvements
 
+* The agent is told its own Matrix user id and working directory. It had neither, so it could not say who it was on Matrix, and could not tell itself apart from the people in a room whose membership it had just read. The id comes from `client.getUserId()` rather than `MATRIX_USER_ID` — the server's answer for the token in use, which is the one that differs when credentials have been swapped without swapping `data/token.json`
+* Installing warns about a `{{PLACEHOLDER}}` nothing supplies, and reports it. Substitution leaves an unknown name in place, which beats blanking it — an emptied path reads as a working instruction — but a typo would otherwise have shipped the agent an instruction to look in a directory called `{{DATA_DIR}}`
 * The outbox protocol moves from the per-room briefing into the shipped `AGENTS.md`, using `{{OUTBOX_DIR}}`. It was in both, precisely in one and vaguely in the other — and the briefing is part of the first user message, so it stays in the session history and is re-sent every turn regardless. One copy now, and a session whose first message is a slash command has it too, where before it skipped the briefing and never learned how to send anything
 * The briefing is now the room id alone, which is the only genuinely per-room fact in it
 

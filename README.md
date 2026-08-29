@@ -456,9 +456,10 @@ to keep context there.
 
 **The bot ships its own `AGENTS.md`** and installs it there on every start, from
 `agent/` at the repo root. It tells the agent what it is: reached through a chat
-client rather than a terminal, one session per room, one run at a time, answers
-posted whole and never edited afterwards, which commands the bot handles before
-the agent sees them, and that it has no Matrix client of its own. Without it an
+client rather than a terminal, its own Matrix user id and working directory, one
+session per room, one run at a time, answers posted whole and never edited
+afterwards, which commands the bot handles before the agent sees them, and that
+it has no Matrix client of its own. Without it an
 agent answers "who are you" as whatever a coding agent assumes by default. It
 also points at `data/main-room.json`, so the answer names the real main room and
 admin instead of being invented, and carries the outbox protocol, so a session
@@ -474,9 +475,11 @@ answered when someone knew to type it.
 
 It is installed rather than symlinked so paths can be filled in — the agent runs
 in `BOT_CWD`, which is neither the repo nor `DATA_DIR`, so anything naming a path
-needs an absolute one and that differs per host. `{{DATA_DIR}}`, `{{BOT_CWD}}`
-and `{{OUTBOX_DIR}}` are substituted as the file is written. Edit `agent/`, not
-the installed copy: the next start overwrites it.
+needs an absolute one and that differs per host. `{{DATA_DIR}}`, `{{BOT_CWD}}`,
+`{{OUTBOX_DIR}}` and `{{MATRIX_USER_ID}}` are substituted as the file is written;
+anything else is left in place and warned about, since an emptied path would read
+as a working instruction. Edit `agent/`, not the installed copy: the next start
+overwrites it.
 
 **An `AGENTS.md` the bot did not write is never touched.** The installed copy
 carries a marker line; a file without it is left exactly as it is, with a

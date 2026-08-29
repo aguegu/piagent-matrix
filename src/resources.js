@@ -56,18 +56,19 @@ export function fillTemplate(text, vars = {}) {
  * @param {string} agentDir  PI_AGENT_DIR
  * @param {Record<string, string>} vars  substituted into `{{NAME}}`
  * @param {string} from  the shipped files, overridable for tests
- * @returns {{ written: string[], skipped: string[], kept: string[] }}
+ * @returns {{ written: string[], skipped: string[], kept: string[], unresolved: string[] }}
  */
 export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
   const written = [];
   const skipped = [];
   const kept = [];
+  const unresolved = [];
   let shipped;
   try {
     shipped = readdirSync(from).filter((n) => n.endsWith(".md")).sort();
   } catch (err) {
     LogService.warn("bot", `Nothing to install from ${from}: ${err?.message ?? err}`);
-    return { written, skipped, kept };
+    return { written, skipped, kept, unresolved };
   }
 
   const target = resolve(agentDir);
@@ -75,6 +76,13 @@ export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
     const path = join(target, file);
     try {
       const body = fillTemplate(readFileSync(join(from, file), "utf8"), vars).replace(/^\s+/, "");
+      // An unsubstituted placeholder reaches the agent verbatim and reads as a
+      // path, so a typo would have it looking for a directory called
+      // "{{DATA_DIR}}". Leaving it in beats blanking it, but not silently.
+      for (const [, name] of body.matchAll(/\{\{(\w+)\}\}/g)) {
+        if (!unresolved.includes(name)) unresolved.push(name);
+        LogService.warn("bot", `${file} uses {{${name}}}, which nothing supplies — it ships as written.`);
+      }
       const wanted = `${MANAGED}\n\n${body}`;
       let current = null;
       try {
@@ -108,5 +116,5 @@ export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
   if (written.length) {
     LogService.info("bot", `Installed into ${target}: ${written.join(", ")}.`);
   }
-  return { written, skipped, kept };
+  return { written, skipped, kept, unresolved };
 }

@@ -580,14 +580,6 @@ async function main() {
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
   mainRoom = new MainRoom(resolve(storagePaths.dataDir));
-  // The bot's standing instructions are source, kept in agent/ and installed
-  // here with this host's paths substituted, rather than living unversioned
-  // under DATA_DIR.
-  installAgentResources(resolve(config.get("agent.agentDir")), {
-    DATA_DIR: resolve(storagePaths.dataDir),
-    BOT_CWD: config.get("agent.cwd"),
-    OUTBOX_DIR: resolve(config.get("outbox.dir")),
-  });
   // The agent's working directory must exist before pi opens a session in it.
   mkdirSync(config.get("agent.cwd"), { recursive: true });
 
@@ -597,6 +589,22 @@ async function main() {
 
   const client = new MatrixClient(matrix.homeserver, accessToken, storage, cryptoStore);
   botClient = client;
+
+  // The bot's standing instructions are source, kept in agent/ and installed
+  // here with this host's values substituted, rather than living unversioned
+  // under DATA_DIR.
+  //
+  // After the client exists, so the agent can be told the user id the server
+  // actually answers for this token rather than the one .env.local claims.
+  // Those differ exactly when someone has swapped credentials without swapping
+  // data/token.json, and the agent should not be the last to know.
+  installAgentResources(resolve(config.get("agent.agentDir")), {
+    DATA_DIR: resolve(storagePaths.dataDir),
+    BOT_CWD: config.get("agent.cwd"),
+    OUTBOX_DIR: resolve(config.get("outbox.dir")),
+    MATRIX_USER_ID: await client.getUserId().catch(() => matrix.userId),
+  });
+
   AutojoinRoomsMixin.setupOnClient(client);
 
   client.on("room.invite", (roomId, event) => {
