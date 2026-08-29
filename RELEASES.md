@@ -54,7 +54,7 @@ in a room together.
 
 ### Tests
 
-* 99 tests, up from 85: what makes a room fit and who its admin is, the sender on every turn, the room name and a name attempting to forge the end of the context block, silence and a reply that merely ends in a full stop, and a placeholder nothing supplies
+* 120 tests, up from 85: what makes a room fit and who its admin is, the sender on every turn, the room name and a name attempting to forge the end of the context block, silence and a reply that merely ends in a full stop, a placeholder nothing supplies, naming the build from a loose ref, a packed ref, a detached HEAD and no checkout at all, and the bound on bots answering bots with what it withholds carried into the next reply
 
 ## 0.2.1 (2026-08-29)
 
