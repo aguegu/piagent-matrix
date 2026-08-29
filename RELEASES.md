@@ -5,6 +5,7 @@
 ### Fixes
 
 * **Two bots in one room answered each other indefinitely.** Replies went out as `m.text`, which the bot also accepts, so with `MATRIX_ALLOWED_USERS` empty each instance treated the other's output as a prompt — 59 turns before anyone looked. Everything the bot sends is now `m.notice`, which automated clients are expected to ignore and which this bot already ignored, so the pair is closed
+* The first message in a room now names it — `Matrix room "Ops" (!r:example.org)` — with a note that a room can be renamed and an id cannot, so anything addressed is addressed by id. The name is fetched once per session, and flattened first: whoever made the room chose it and it lands inside the `[context]` block, so brackets are stripped and whitespace collapsed, or a name could forge the end of that block and have what follows read as instruction
 * **The agent was never told who was speaking.** The sender reached `#runPrompt` and went into a log line and nowhere else, so asked whether a message came from another bot it answered "still `@aguegu` on my side" three times, having been given nothing either way. Ordinary messages now carry `This message is from <sender>`, on every turn because it changes between turns. A turn beginning with `/` still carries no context — a prefix would stop pi expanding the template — so `AGENTS.md` tells the agent it is sometimes not told, and never to name a sender it was not given
 * The shipped `AGENTS.md` listed the commands the bot intercepts but omitted `.reload`, so the agent could offer to handle one it never sees
 

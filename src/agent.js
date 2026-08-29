@@ -132,10 +132,12 @@ export class AgentManager {
    *
    * The room id only needs saying once — it is the same for the whole session.
    */
-  #preamble(roomId, sender) {
+  #preamble(roomId, sender, roomName) {
     const lines = ["[context]", `This message is from ${sender}.`];
     if (!this.briefed.has(roomId)) {
-      lines.push(`You are replying in Matrix room ${roomId}. "here" and "this room" mean that room id.`);
+      const where = roomName ? `"${roomName}" (${roomId})` : roomId;
+      lines.push(`You are replying in Matrix room ${where}. "here" and "this room" mean that room id.`);
+      if (roomName) lines.push("A room can be renamed; the id cannot, so address anything by id.");
     }
     lines.push("[/context]", "");
     return lines.join("\n");
@@ -337,8 +339,13 @@ export class AgentManager {
     // all — not even the sender — which is why AGENTS.md tells the agent it is
     // sometimes not told, rather than to expect it.
     const isSlashCommand = text.startsWith("/");
-    const prompt = isSlashCommand ? text : this.#preamble(roomId, sender) + text;
-    if (!isSlashCommand) this.briefed.add(roomId);
+    let prompt = text;
+    if (!isSlashCommand) {
+      // Only worth fetching for the turn that names the room.
+      const roomName = this.briefed.has(roomId) ? "" : await roomDisplayName(client, roomId);
+      prompt = this.#preamble(roomId, sender, roomName) + text;
+      this.briefed.add(roomId);
+    }
 
     try {
       await session.prompt(prompt, { streamingBehavior: "followUp" });
@@ -572,6 +579,27 @@ export class AgentManager {
       }
     }
     this.sessions.clear();
+  }
+}
+
+/**
+ * A room's name, flattened to something safe to put in a prompt.
+ *
+ * Whoever made the room chose it, and it lands inside the [context] block — so
+ * a name carrying a newline or a bracket could forge the end of that block and
+ * have the rest read as instruction rather than as a room's name. Brackets go,
+ * whitespace collapses to single spaces, and the result is short.
+ *
+ * Returns "" for an unnamed room, which 404s, and for any other failure: a
+ * missing name costs a little context, and nothing else.
+ */
+async function roomDisplayName(client, roomId) {
+  try {
+    const event = await client.getRoomStateEvent(roomId, "m.room.name", "");
+    const raw = typeof event?.name === "string" ? event.name : "";
+    return raw.replace(/[[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 60);
+  } catch {
+    return "";
   }
 }
 
