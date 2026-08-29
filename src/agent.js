@@ -354,11 +354,10 @@ export class AgentManager {
     }
 
     const body = renderReply(buffer);
-    if (!body.trim()) {
-      // Nothing to post. This is a normal outcome, not a failure: AGENTS.md
-      // tells the agent that silence is a reply, so a message needing nothing
-      // from it should produce nothing — which is also what keeps it out of a
-      // conversation between other people.
+    if (isSilence(body)) {
+      // A normal outcome, not a failure: AGENTS.md tells the agent that silence
+      // is a reply, which is what keeps it out of a conversation between other
+      // people.
       LogService.info("agent", `run in ${roomId} said nothing`);
       return;
     }
@@ -574,6 +573,19 @@ export class AgentManager {
     }
     this.sessions.clear();
   }
+}
+
+/**
+ * Whether a finished run amounts to saying nothing.
+ *
+ * Empty is the obvious case. A lone full stop is the other: a model cannot
+ * literally emit nothing — it has to end its turn somehow — so AGENTS.md asks
+ * for "." and this drops it. Told instead to "produce no text at all", one ran
+ * `bash true` twice looking for a way to do nothing, then sent "." anyway,
+ * which went to the room because it is not empty.
+ */
+function isSilence(body) {
+  return /^[.。·…]?$/.test(body.trim());
 }
 
 /**

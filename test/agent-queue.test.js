@@ -298,3 +298,51 @@ describe("dropping a room the bot has left", () => {
     assert.equal(await makeManager(makeFakeSession()).disposeRoom("!never:example.org"), false);
   });
 });
+
+describe("saying nothing", () => {
+  /** A session whose whole reply is `text`, whatever it was asked. */
+  function makeSayingSession(reply) {
+    const listeners = [];
+    return {
+      get isStreaming() { return false; },
+      subscribe(fn) { listeners.push(fn); return () => {}; },
+      async prompt() {
+        for (const fn of [...listeners]) {
+          fn({
+            type: "message_update",
+            assistantMessageEvent: {
+              type: "text_delta",
+              partial: { role: "assistant", content: [{ type: "text", text: reply }] },
+            },
+          });
+        }
+      },
+      dispose() {},
+    };
+  }
+
+  const run = async (reply) => {
+    const client = makeFakeClient();
+    const mgr = makeManager(makeSayingSession(reply));
+    await mgr.handleMessage({ roomId: "!r:example.org", text: "hi", sender: "@a:example.org", client });
+    return client.sent;
+  };
+
+  it("posts nothing for a lone full stop", async () => {
+    // A model cannot emit nothing — it has to end its turn — so AGENTS.md asks
+    // for "." and this drops it. Told to "produce no text at all", one ran
+    // `bash true` twice hunting for a way to do nothing, then sent "." anyway.
+    assert.deepEqual(await run("."), []);
+    assert.deepEqual(await run("  .  "), [], "surrounding space is still silence");
+  });
+
+  it("posts nothing for an empty reply", async () => {
+    assert.deepEqual(await run(""), []);
+  });
+
+  it("still posts a real answer that merely ends in a full stop", async () => {
+    const sent = await run("Yes.");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].body, "Yes.");
+  });
+});
