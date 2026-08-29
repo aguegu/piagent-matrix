@@ -456,7 +456,7 @@ to keep context there.
 
 **The bot ships its own `AGENTS.md`** and installs it there on every start, from
 `agent/` at the repo root. It tells the agent what it is: reached through a chat
-client rather than a terminal, its own Matrix user id and working directory, one
+client rather than a terminal, its name and user id and working directory, one
 session per room, one run at a time, answers posted whole and never edited
 afterwards, which commands the bot handles before the agent sees them, and that
 it has no Matrix client of its own. Without it an
@@ -476,7 +476,8 @@ answered when someone knew to type it.
 It is installed rather than symlinked so paths can be filled in — the agent runs
 in `BOT_CWD`, which is neither the repo nor `DATA_DIR`, so anything naming a path
 needs an absolute one and that differs per host. `{{DATA_DIR}}`, `{{BOT_CWD}}`,
-`{{OUTBOX_DIR}}` and `{{MATRIX_USER_ID}}` are substituted as the file is written;
+`{{OUTBOX_DIR}}`, `{{MATRIX_USER_ID}}` and `{{BOT_NAME}}` are substituted as the
+file is written;
 anything else is left in place and warned about, since an emptied path would read
 as a working instruction. Edit `agent/`, not the installed copy: the next start
 overwrites it.

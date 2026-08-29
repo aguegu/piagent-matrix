@@ -604,11 +604,16 @@ async function main() {
   // actually answers for this token rather than the one .env.local claims.
   // Those differ exactly when someone has swapped credentials without swapping
   // data/token.json, and the agent should not be the last to know.
+  const userId = await client.getUserId().catch(() => matrix.userId);
   installAgentResources(resolve(config.get("agent.agentDir")), {
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),
-    MATRIX_USER_ID: await client.getUserId().catch(() => matrix.userId),
+    MATRIX_USER_ID: userId,
+    // The localpart, which is what a person calls it: @bk18pi:example.org is
+    // bk18pi. Given rather than derived, so an introduction does not depend on
+    // the agent taking a user id apart correctly.
+    BOT_NAME: userId.replace(/^@/, "").split(":")[0],
   });
 
   AutojoinRoomsMixin.setupOnClient(client);
