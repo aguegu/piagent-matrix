@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
 import { AgentManager } from "../src/agent.js";
 
@@ -102,5 +102,33 @@ describe("recorded state", () => {
     writeFileSync(file, "{ not json");
     const mgr = makeManager({ stateFile: file, thinkingLevel: "minimal" });
     assert.equal((await mgr.describeThinking("!r:example.org")).current, "minimal");
+  });
+});
+
+describe("telling extensions where the agent directory is", () => {
+  it("sets PI_CODING_AGENT_DIR from agentDir", () => {
+    // pi's getAgentDir() reads this and otherwise answers ~/.pi/agent, so an
+    // extension would use the operator's home while the session ran out of
+    // ours. Passing agentDir to createAgentSession does not cover that call.
+    const before = process.env.PI_CODING_AGENT_DIR;
+    try {
+      new AgentManager({ cwd: process.cwd(), agentDir: "./data/pi" });
+      assert.equal(process.env.PI_CODING_AGENT_DIR, resolve("./data/pi"));
+    } finally {
+      if (before === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = before;
+    }
+  });
+
+  it("leaves it alone when there is no agentDir to point at", () => {
+    const before = process.env.PI_CODING_AGENT_DIR;
+    try {
+      delete process.env.PI_CODING_AGENT_DIR;
+      new AgentManager({ cwd: process.cwd() });
+      assert.equal(process.env.PI_CODING_AGENT_DIR, undefined, "pi's own default stands");
+    } finally {
+      if (before === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = before;
+    }
   });
 });

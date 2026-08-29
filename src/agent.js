@@ -37,6 +37,14 @@ export class AgentManager {
     this.createSession = opts.createSession ?? createAgentSession;
     // Absolute, or null to fall back to pi's own default (~/.pi/agent).
     this.agentDir = opts.agentDir ? resolve(opts.agentDir) : null;
+    // Extensions ask pi where the agent directory is, via its exported
+    // getAgentDir(), which reads this variable and otherwise answers
+    // ~/.pi/agent. Passing agentDir to createAgentSession steers pi's own
+    // loading but not that call, so an extension would read and write the
+    // operator's home directory while the session ran out of ours — the bot's
+    // credentials in one place, an extension's state in another, and neither
+    // travelling with a container. Set it so both agree.
+    if (this.agentDir) process.env.PI_CODING_AGENT_DIR = this.agentDir;
     // `.model` and `.thinking` record their choices here so they survive a
     // restart; that is the point of those commands, and why neither setting is
     // configured anywhere else.

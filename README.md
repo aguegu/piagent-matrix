@@ -391,6 +391,14 @@ Everything pi loads — extensions, skills, context files, settings — comes fr
 `PI_AGENT_DIR` (default `data/pi`), because the bot passes it as `agentDir`.
 So you extend the bot exactly as you would extend pi, pointed at that directory.
 
+The bot also exports `PI_CODING_AGENT_DIR` into its own environment, set to the
+same path. `agentDir` steers pi's loading but not pi's exported `getAgentDir()`,
+which reads that variable and otherwise answers `~/.pi/agent` — so without it an
+extension keeps its state in the operator's home directory while the session runs
+out of the bot's. **An extension that hardcodes `~/.pi/agent` rather than calling
+`getAgentDir()` is unaffected and will still read the home directory**; that is a
+bug to report upstream, not something the bot can route around.
+
 **Note the variable is pi's own**, `PI_CODING_AGENT_DIR`, not this project's
 `PI_AGENT_DIR`. The pi CLI ignores ours.
 
