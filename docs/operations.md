@@ -74,6 +74,8 @@ Two things the script deliberately does:
 - The bot-to-bot limit is per process: restarting clears the counters, so a pair
   mid-runaway resumes with a fresh allowance.
 - `BOT_CWD` in the committed `.env` is an absolute path from one machine.
+- No service unit. Deployments run it under whatever supervises them; there is
+  no systemd unit in the repo.
 - `matrix-bot-sdk` depends on the deprecated `request`, which carries
   unpatchable advisories including a critical one in `form-data`. Practical
   exposure is low for a text-only bot talking to a homeserver you control.

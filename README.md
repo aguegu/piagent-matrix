@@ -220,16 +220,3 @@ directory, and consider passing an explicit `tools` allowlist to
 | [pi integration](docs/pi-integration.md) | pi API notes and the behaviour that is easy to get wrong |
 | [SECURITY.md](SECURITY.md) | blast radius, and the dependency advisories |
 | [Releases](RELEASES.md) · [blog](docs/blog/) | what changed, and a few things worth writing up |
-
-## Roadmap
-
-- [x] Persistent crypto store, E2EE, restart survival, cross-signing
-- [x] `config` + `dotenv-flow`
-- [x] pi agent wired in, per-room sessions and serialization
-- [x] Outbox for other processes, and an inbox that gives the agent work
-- [x] Markdown replies
-- [x] A main room that adopts, verifies and repairs itself
-- [x] Commands in Matrix, with the controls held to the main room
-- [ ] Ignore pre-startup events; add a run timeout
-- [ ] Scope the agent's tools and working directory
-- [ ] systemd unit for deployment

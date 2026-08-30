@@ -4,6 +4,7 @@
 
 ### Documentation
 
+* The roadmap is gone. Its ticked items had fallen well behind what shipped, and its unticked ones were wishes rather than plans — the two that describe real shortcomings were already in Known gaps, and the third (a systemd unit) has joined them. A list that flatters the past and guesses at the future is worse than no list
 * The README is a front page again: what it is, how it works, getting started, troubleshooting, the command table, and a map of the rest. It had grown to 894 lines, so the reference material moved into `docs/` — configuration, model providers, commands, spools, the main room, multi-bot rooms, extending, and running it. Three paragraphs that repeated Getting started went with it
 
 ### New Features
