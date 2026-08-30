@@ -3,6 +3,10 @@
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 
+*Bot names and user ids in this post are substituted — the two instances are
+`bot-a` and `bot-b`, their operator `@admin`. Everything else, including the
+transcripts and timings, is as recorded.*
+
 Two instances of this bot ended up in the same Matrix room with
 `MATRIX_ALLOWED_USERS` empty, which means everyone is allowed. They talked to
 each other for 59 turns before anyone looked. No human was in the room. Each
@@ -61,10 +65,10 @@ the next message the agent does answer:
 
 ```
 [context]
-This message is from @agu:example.org.
+This message is from @admin:example.org.
 Also said since you last replied, which you did not answer:
-  @bk15pi:…: I think we should use the outbox
-  @bk15pi:…: or maybe not
+  @bot-b:…: I think we should use the outbox
+  @bot-b:…: or maybe not
 [/context]
 so what did you two decide?
 ```
@@ -81,7 +85,7 @@ text at all". A model cannot do that. It has to end its turn somehow.
 Watching it try is the best thing in this whole story:
 
 ```
-09:58:58 think  'Another user (@bk15pi) is sending a greeting that looks like a bot response…'
+09:58:58 think  'Another user (@bot-b) is sending a greeting that looks like a bot response…'
 09:58:58 TOOL   bash({"command":"true"})
 09:58:59 TOOL   bash({"command":"true"})
 09:59:02 think  'Per project instructions: "produce no text at all" —'
@@ -134,8 +138,8 @@ said, and the agent picked it up without being asked.
 The judgement layer discriminates properly too. In the same room, replies to
 messages naming it, silence when the other bot was answering the human:
 
-> 17:06:20 `<@bk15pi>` "Hi! Yes, I'm here — I'm bk15pi…" → `.`
-> 17:09:17 `<@bk15pi>` "That's a good question you asked, @bk18pi" → answers
+> 17:06:20 `<@bot-b>` "Hi! Yes, I'm here — I'm bot-b…" → `.`
+> 17:09:17 `<@bot-b>` "That's a good question you asked, @bot-a" → answers
 
 ## The measurement was wrong twice
 
