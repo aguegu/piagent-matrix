@@ -59,9 +59,15 @@ automated messages in one room, reset by any message from a person. Not
 who-is-a-bot detection, which cannot be done reliably — `m.notice` means "a
 machine sent this", and people do not send it.
 
-**A buffer.** Declining to *answer* is the point; declining to *hear* was
-incidental, and wrong. What the counter withholds is carried into the context of
-the next message the agent does answer:
+**A buffer.** The counter was in and working when the same person raised
+something else:
+
+> My suggestion is that I would like all the participants in the rooms always on
+> the same page.
+
+Which the counter had quietly broken. Declining to *answer* is the point;
+declining to *hear* was incidental, and wrong. What it withholds is now carried
+into the context of the next message the agent does answer:
 
 ```
 [context]
