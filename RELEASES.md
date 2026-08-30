@@ -1,5 +1,7 @@
 # Releases
 
+## 0.2.3 (in progress)
+
 ## 0.2.2 (2026-08-29)
 
 The agent learns what it is, who it is, and who is talking to it. Almost all of
