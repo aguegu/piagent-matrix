@@ -80,73 +80,21 @@ empty means everyone, and the agent runs shell commands.
 ### 4. Give the agent a model provider
 
 The bot reads pi's credentials from `PI_AGENT_DIR` (default `data/pi`), **not**
-`~/.pi/agent`. A working interactive `pi` login on the same machine does not
-carry over. Skip this and the bot starts, joins, and then fails on the first
+`~/.pi/agent`. Skip this and the bot starts, joins, and then fails on the first
 message with `No models with complete auth are available in …`.
-
-You do not need pi installed or logged in. Pick whichever fits:
-
-**a. Log in** — stores the credential in `data/pi/auth.json`, pi's own store,
-rather than in a project file. pi accepts a pasted API key, so this works on a
-headless host; only OAuth providers need a browser:
 
 ```sh
 PI_CODING_AGENT_DIR=./data/pi npx pi
 # then inside pi:  /login <provider>
 ```
 
-> **Note the variable.** `PI_CODING_AGENT_DIR` is pi's own; `PI_AGENT_DIR` is
-> this bot's. The pi CLI ignores `PI_AGENT_DIR` and silently writes to its own
-> default instead, which looks like success and leaves the bot finding nothing.
-> An `auth.json` containing `{}` means exactly this — the file is created at
-> startup, so its presence does not mean a login completed.
->
-> Setting `PI_CODING_AGENT_DIR` also avoids having to know where that default
-> is. It comes from `piConfig.configDir` in whichever pi build you are running —
-> `~/.pi/agent` for the npm package, but a standalone install can differ (one
-> reported `~/.config/pi`). Check with `command -v pi` and `npx pi --version` if
-> you need to find an existing credential.
+**Note the variable**: `PI_CODING_AGENT_DIR` is pi's own, `PI_AGENT_DIR` is this
+bot's, and the pi CLI ignores ours — writing to its own default instead, which
+looks like success and leaves the bot finding nothing.
 
-**b. An API key in the environment** — fewer steps, but it puts the key in a
-file or your shell history rather than pi's credential store. `dotenv-flow` puts
-it in the environment and pi picks it up, writing `data/pi/auth.json` on first
-use:
-
-```sh
-echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env.local
-```
-
-Recognised keys include `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`,
-`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`,
-`CEREBRAS_API_KEY`, `FIREWORKS_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
-`XAI_API_KEY`.
-
-**c. Reuse an existing login** on this machine — copy from wherever your pi
-keeps it (see the note above; `~/.pi/agent` for the npm package):
-
-```sh
-mkdir -p data/pi && cp ~/.pi/agent/auth.json data/pi/
-```
-
-Check it worked before starting:
-
-```sh
-node -e "import('@earendil-works/pi-coding-agent').then(async m=>{
-  const rt = await m.ModelRuntime.create({ authPath:'./data/pi/auth.json', modelsStorePath:'./data/pi/models-store.json' });
-  const a = await rt.getAvailable();
-  console.log(a.length ? 'available: '+a.map(x=>x.provider+'/'+x.id).join(', ') : 'NONE — see step 4');
-})"
-```
-
-The bot starts on the first available. There is nothing to configure: say
-**`.model <provider/id>`** in the main room to pick another, and the choice is
-recorded under `DATA_DIR/agent.json` so it survives restarts.
-
-**`/login` is the only step in the TUI the bot depends on.** pi's own `/model`
-does not carry over — it records `defaultProvider` and `defaultModel` in
-`data/pi/settings.json`, which the bot never reads, since `ModelRuntime` is
-given `auth.json` and `models-store.json` and nothing else. Running it there is
-harmless, just not what the bot picks up.
+An API key in the environment or an existing `auth.json` work too, and there is
+a one-liner to check a provider resolved before starting:
+**[docs/model-providers.md](docs/model-providers.md)**.
 
 ### 5. First start
 
@@ -173,7 +121,7 @@ once per fresh login — rare, since the crypto store persists.
 ### 7. Invite and test
 
 Invite the bot from an allowlisted account; it autojoins. Since this is its
-first room, it adopts it as the [main room](#the-main-room) and says so — that
+first room, it adopts it as the [main room](docs/main-room.md) and says so — that
 message is the confirmation the whole setup worked. Send it a message, or
 `.help` for what it answers to.
 
@@ -187,461 +135,6 @@ message is the confirmation the whole setup worked. Send it a message, or
 | `No models with complete auth are available in …` | pi provider not authenticated in `PI_AGENT_DIR` — step 4. If you logged in with `PI_AGENT_DIR=… pi`, the credential went to pi's own default instead: pi's variable is `PI_CODING_AGENT_DIR` |
 | `Allowing … — MATRIX_ALLOWED_USERS is empty` | Anyone can drive the agent — step 3 |
 | "Encrypted by a device not verified by its owner" | Not cross-signed — step 6 |
-
-## Why the crypto binding needs an install script
-
-`@matrix-org/matrix-sdk-crypto-nodejs` ships no binary. Its `postinstall`
-(`download-lib.js`) fetches a ~22 MB native library from GitHub Releases for
-your platform, and `index.js` loads it from next to itself. Without it,
-`require()` fails with `Cannot find module '…-linux-x64-gnu'` and the bot cannot
-start — no crypto binding, no E2EE.
-
-npm may decline to run it:
-
-```
-npm warn install-scripts  @matrix-org/matrix-sdk-crypto-nodejs@0.4.0 (postinstall: node download-lib.js)
-```
-
-The commands are in [step 2](#2-check-the-crypto-binding-landed).
-
-The other scripts npm flags are safe to leave unapproved: `@google/genai`'s
-preinstall is a literal no-op, and `protobufjs`'s postinstall is not needed by
-consumers.
-
-Two things that bite on servers:
-
-- The download happens **at install time** and reaches
-  `github.com/matrix-org/matrix-rust-sdk-crypto-nodejs/releases`. Restricted
-  egress breaks the install; the script honours `https_proxy` / `HTTPS_PROXY`.
-- It selects by `process.platform` / `process.arch`, with a musl check. On
-  arm64 or Alpine it fetches a different build, so confirm one exists for your
-  target.
-
-`.env` is a committed template: keys, comments, and non-secret defaults.
-`.env.local` holds the real values and is gitignored. `dotenv-flow` loads `.env`
-first and lets `.env.local` override every key; real environment variables win
-over both.
-
-On first start the bot logs in with `MATRIX_PASSWORD` and writes
-`data/token.json` (mode 0600). After that it reuses the stored token and never
-needs the password again. Run `npm run cross-sign` once afterwards.
-
-The agent needs a model provider of its own. It reads `PI_AGENT_DIR`
-(default `data/pi`) rather than `~/.pi/agent`, so the bot does not depend on
-whoever runs it having logged into pi, and keeps working as another user or in
-a container:
-
-```sh
-PI_CODING_AGENT_DIR=./data/pi npx pi   # authenticate a provider (pi's own var)
-# or, to reuse an existing login:
-cp ~/.pi/agent/auth.json data/pi/
-```
-
-Invite the bot to a room from an allowed account and it will autojoin.
-
-## Configuration
-
-`config/default.js` ([node-config](https://github.com/node-config/node-config))
-bootstraps `dotenv-flow` and exposes a tree the code reads via `config.get(...)`.
-
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `MATRIX_HOMESERVER` | yes | Base URL, e.g. `https://matrix.example.org` |
-| `MATRIX_USER_ID` | yes | Full MXID, e.g. `@mybot:example.org` |
-| `MATRIX_PASSWORD` | first run | Initial login, and `cross-sign` |
-| `MATRIX_ALLOWED_USERS` | no | Comma-separated MXIDs. **Empty means everyone is allowed** |
-| `MATRIX_DEVICE_NAME` | no | Shown in Element's session list |
-| `MATRIX_RECOVERY_KEY` | no | Only for `npm run cross-sign`; the bot never reads it |
-| `DATA_DIR` | no | Identity and crypto store. Default `./data` |
-| `LOG_LEVEL` | no | `debug` \| `info` \| `warn` \| `error` |
-| `PI_AGENT_DIR` | no | pi's auth and settings. Default `${DATA_DIR}/pi` |
-| `BOT_CWD` | yes | Working directory the agent operates in. `.env` defaults it to `/tmp/piagent-workspace`; the bot refuses to start if unset |
-| `SESSION_DIR` | no | Persist each room's conversation here. Unset = memory only |
-| `OUTBOX_DIR` | no | Spool watched for outgoing messages. Default `./outbox` |
-| `INBOX_DIR` | no | Spool watched for prompts to run. Default `./inbox` |
-
-`MATRIX_HOMESERVER` and `MATRIX_USER_ID` are checked explicitly at startup:
-`config.get()` alone would not catch them, because the template defines every
-key as an empty string and `""` counts as defined.
-
-## Posting from other processes
-
-A second process must never open its own client against the bot's crypto store.
-Two clients load the same outbound Megolm session and each advances its own copy
-of the ratchet, so both encrypt at the same `message_index`. Strict clients
-reject the duplicate as a replay and show "undecryptable", and the same keystream
-ends up covering two different plaintexts.
-
-Instead, drop a file in the outbox and the running bot sends it:
-
-```sh
-# Write a dotfile inside the spool (the bot skips dotfiles, and it is the same
-# filesystem so rename is atomic), then rename it in.
-stamp=$(date -u +%Y%m%dT%H%M%SZ)
-tmp="$OUTBOX_DIR/.tmp-$stamp.$$"
-
-# Addressed — records the destination at write time. Reading the bot's own
-# main room keeps the two in step without configuring it twice.
-room=$(jq -r '.roomId // empty' "$BOT_DIR/data/main-room.json")
-jq -n --arg room "$room" --arg body 'deploy finished' '{room: $room, body: $body}' > "$tmp"
-mv "$tmp" "$OUTBOX_DIR/$stamp-deploy.json"
-
-# Or unaddressed, letting the bot route it to its main room:
-#   printf 'deploy finished\n' > "$tmp"
-#   mv "$tmp" "$OUTBOX_DIR/$stamp-deploy.txt"
-```
-
-Prefer `*.json` for anything scheduled. A `*.txt` is resolved against the main
-room when the bot drains the spool, so a report written now lands wherever the
-main room happens to be then; a `*.json` lands where it was addressed.
-
-| File | Meaning |
-| --- | --- |
-| `*.txt` | Body is the whole file, sent to the [main room](#the-main-room) |
-| `*.json` | `{ "room"?: "!id:server", "body": "...", "html"?: "..." }` |
-
-Unaddressed `*.txt` drops go to the bot's **main room** (below). `*.json` drops
-naming their own room always work, main room or not.
-
-The agent is told this protocol in its shipped `AGENTS.md`, which pi reads every
-turn, so asking it to "post a report here every hour" produces a `*.json` drop
-addressed to that room rather than a `*.txt` that lands in the default. The
-per-message context block carries only what changes: who is speaking, and the
-room on the first turn of a session.
-
-Files are processed in filename order, so a timestamp prefix preserves ordering.
-Messages spooled while the bot is down go out on the next start. A failed send is
-parked as `.failed` rather than retried forever; a file left `.sending` after a
-crash is parked too, since we cannot tell whether it reached the server and
-re-sending risks a duplicate.
-
-## Giving the agent work: the inbox
-
-The outbox posts text. The inbox runs prompts. A cron job that wants the agent
-to *do* something needs the second, and reaching for the first fails quietly:
-
-```sh
-# what does not work — the cue reaches the room, and not the agent
-echo '{"room":"!r:example.org","body":"[cron] fetch the weather and post it here"}' \
-  > "$OUTBOX/$(date +%s)-weather.json"
-```
-
-That posts the cue as the bot, and **a bot ignores its own messages** — it has
-to, or it would answer itself forever. So everyone in the room sees the
-instruction and the one agent it was meant for does not.
-
-```sh
-# what does: the file is the prompt, and only the reply is posted
-tmp=$(mktemp)
-echo '{"room":"!r:example.org","prompt":"fetch the weather for Gulou, Fuzhou and post a brief report","from":"the hourly weather cron"}' > "$tmp"
-mv "$tmp" "$INBOX/$(date +%s)-weather.json"
-```
-
-| | `OUTBOX_DIR` | `INBOX_DIR` |
-| --- | --- | --- |
-| A file is | text to post | work to do |
-| Field | `body` | `prompt` |
-| The room sees | the file's contents | the agent's reply |
-| `.txt` goes to | the main room | the main room |
-
-`from` is what the agent is told the prompt came from — it appears where a
-sender normally would, and defaults to "a scheduled job on this host". It is
-deliberately not shaped like a Matrix id: the agent is told who is speaking on
-every turn, and a cron job dressed as a person would be the one lie in that
-channel.
-
-Both spools share their mechanics (`src/spool.js`): write elsewhere and
-`rename()` in so a partial file is never read, names are processed in order,
-failures park as `.failed`, and a claim left by a crash is parked rather than
-retried — a repeated post is a duplicate message, a repeated prompt is a
-duplicate agent run.
-
-A `.json` in the inbox carrying `body` instead of `prompt` is parked with a
-message saying which spool it belongs in, rather than running someone's
-announcement as an instruction.
-
-**Choose by who has to think.** A script that can produce the finished text —
-disk usage, a service's status, a count — should write it to the outbox: no
-model runs, it costs nothing, and it still reports when the agent is busy or
-wedged. The inbox is for when producing the text needs judgement or a tool the
-shell does not have. `hourly-stats.sh` is the first kind; a weather report that
-wants a real search rather than scraping whatever `curl` returns is the second.
-
-**Anything that can write to either directory can drive the bot** — the outbox
-speaks as it, the inbox thinks as it. See [SECURITY.md](SECURITY.md).
-
-## The main room
-
-The bot's control channel: normally the room holding just the bot and its admin.
-Unaddressed `*.txt` outbox drops go here, and it is where operational output
-belongs.
-
-**It is recorded, not configured**, in `data/main-room.json`. There is no
-environment variable for it: an override existed while a wrong record could only
-be corrected on the host, and now that kicking the bot out drops the record, a
-second source of truth would only be something to argue with. Recording means a
-bot started before it was invited anywhere picks a room up as soon as it joins,
-with no restart.
-
-**A room is adopted when there is no main room and the room fits**: the bot is
-in it, it holds no more than two members, and — when `MATRIX_ALLOWED_USERS` is
-set — the other one may run commands. That last part is what makes adoption
-safe. A stranger cannot hand the bot a control channel by inviting it somewhere,
-and a busy working room cannot become one by accident.
-
-The room's **admin** is recorded alongside it — whoever invited the bot into the
-room that became its control channel:
-
-```json
-{
-  "roomId": "!abc:example.org",
-  "admin": "@admin:example.org",
-  "recordedBecause": "first room that fits"
-}
-```
-
-A room id on its own says where the bot takes orders, not who from. The invite
-is used rather than the room's membership because it is a fact the bot observed,
-and because membership answers nothing when `MATRIX_ALLOWED_USERS` is empty:
-everyone is allowed then, and the other member may be another bot. The
-allowlisted member is the fallback for a room adopted at startup, where no
-invite was seen; with neither, no admin is recorded, since unrecorded reads as
-unknown where a guess reads as established.
-
-The startup log and `.rooms` both name the admin, and the room is flagged at
-startup if they are no longer in it — a control channel outliving the person it was adopted for
-is worth noticing, even though it still works. Records written before this
-simply carry no `admin`, and are read as before.
-
-| Situation | What happens |
-| --- | --- |
-| Invited to a room that fits, with none recorded | Adopted, and the bot says so in that room |
-| Invited to a room that does not fit | Not adopted; logged with the reason |
-| No main room at startup, one joined room fits | Adopted |
-| No main room at startup, several fit | Refuses to guess; warns |
-
-**The record is dropped as soon as it stops being usable** — the bot is kicked
-from the main room, or starts up to find itself no longer in it. A pointer to a
-room the bot cannot reach is worse than no pointer at all: commands run in the
-main room and nowhere else, so the bot goes silent while looking healthy, and
-every alternative is declined because a room is *already* recorded. Dropping it
-lets the next room that fits take over, so recovering never means editing a file
-on the host.
-
-So to move the control channel: kick the bot from the main room, then invite it
-to the one you want. The invite is the signal — a room just joined wins outright
-if it fits, which is how an admin re-elects without touching the host.
-
-**Strict to adopt, lenient to keep.** A main room that later grows past two
-members, or whose admin steps out, is warned about but not dropped: it still
-works. Only being outside the room is disqualifying, because only that stops it
-working.
-
-**The bot says so when it adopts.** It posts in the room it just took —
-commands run here, later output arrives here, other rooms get `.info` only.
-Otherwise adoption is invisible: it happens on join and goes straight to disk,
-and the room that gets the powers should be told it has them. A failed notice is
-logged, not thrown; the adoption still stands.
-
-**It is checked at every start.** A recorded room used to be trusted on sight,
-so one the bot had been kicked from looked healthy right up until every command
-was refused and outbox drops piled up as `.failed`. Four things are checked: the
-bot is in it (dropping the record if not), an allowlisted user is in it, the
-recorded admin is still in it, and it has no more than two members. The
-warning goes to the log always, and into the main room only when there is
-someone there to act on it — never to a room the bot is not in, and never to one
-holding no allowed user, since a room of strangers is the last place to announce
-that it is the bot's control channel.
-
-The main room is read per send rather than captured at startup, so a room
-adopted later takes effect immediately.
-
-## More than one bot in a room
-
-Two of these can share a room and talk to each other. That is deliberate, and it
-took two tries to get right.
-
-Matrix distinguishes `m.text`, which a person sends, from `m.notice`, which an
-automated client sends. Clients render notices differently — muted, in Element —
-and bots are conventionally expected to ignore them, so that two machines do not
-answer each other forever. This bot **sends** notices, so a well-behaved
-counterpart is not drawn in, and also **accepts** them, so agents that are meant
-to talk can.
-
-Accepting them is the second try. Ignoring notices did stop a runaway, and also
-left two agents sitting in a room unable to hear each other at all — which is
-not what anyone wanted from them.
-
-**Deciding what deserves an answer is the agent's job.** `AGENTS.md` gives it
-one test: is this message *for me*? Being greeted, asked something or named gets
-an answer, whoever is asking; two other participants talking to each other does
-not. The earlier wording — answer "when you have something to add" — judged the
-*content* instead, and small talk contains nothing to add, so a bot greeted by
-name six times running said nothing back all six times.
-
-What bounds it is a counter, for the case where judgement does not end an
-exchange:
-
-| | |
-| --- | --- |
-| Limit | three consecutive automated messages in one room |
-| Reset | any message from a person |
-| Scope | per room, per process — a restart forgets it |
-| Withheld | not answered, but not unheard — carried into the next reply |
-
-**What is withheld is still heard.** Declining to *answer* is the point;
-declining to *hear* would leave the agent with a hole in the conversation that
-everyone else in the room saw, so asked later what was decided it could not say
-and would not know why. Messages it does not answer ride along in the context of
-the next one it does — the last ten, truncated, since the thing being withheld
-is by definition a bot that will not stop talking.
-
-Before that rule existed the same pair ran **59 turns**, each running shell
-commands on the other's output with nobody in the room. A different model, or a
-prompt that nudges it, will do that again; the counter is what makes the cost
-bounded rather than open-ended. The agent is told the limit exists, so ending a
-conversation stays its job rather than the counter's.
-
-The log marks which is which, so a transcript can be read back:
-
-```
-< [e2ee] [bot] @otherbot:example.org: "..."   counted toward the limit
-< [e2ee] @admin:example.org: "..."            a person; resets it
-```
-
-None of this is access control. `m.notice` is a convention a hostile or careless
-bot can ignore, and the counter bounds a runaway rather than preventing one —
-`MATRIX_ALLOWED_USERS` is what decides who may drive the agent at all.
-
-## Extending the agent
-
-Everything pi loads — extensions, skills, context files, settings — comes from
-`PI_AGENT_DIR` (default `data/pi`), because the bot passes it as `agentDir`.
-So you extend the bot exactly as you would extend pi, pointed at that directory.
-
-The bot also exports `PI_CODING_AGENT_DIR` into its own environment, set to the
-same path. `agentDir` steers pi's loading but not pi's exported `getAgentDir()`,
-which reads that variable and otherwise answers `~/.pi/agent` — so without it an
-extension keeps its state in the operator's home directory while the session runs
-out of the bot's. **An extension that hardcodes `~/.pi/agent` rather than calling
-`getAgentDir()` is unaffected and will still read the home directory**; that is a
-bug to report upstream, not something the bot can route around.
-
-**Note the variable is pi's own**, `PI_CODING_AGENT_DIR`, not this project's
-`PI_AGENT_DIR`. The pi CLI ignores ours.
-
-### Extensions
-
-**Extensions are where the agent's extra tools come from** — web search, for
-instance — and they are not skills. Asked to compare "the skill list", two bots
-correctly reported zero each and concluded they were identical, while one had
-`pi-web-access` and the other did not. Skills are markdown in
-`data/pi/skills/`; tools come from `packages` in `data/pi/settings.json`.
-
-```sh
-PI_CODING_AGENT_DIR=./data/pi npx pi install npm:pi-web-access
-```
-
-That appends to `packages` in `data/pi/settings.json`. Then send **`.reload`**
-in the main room — sessions are created once per room and cached for the process
-lifetime, so a running bot otherwise keeps the extension set it started with.
-Restarting works too.
-
-On startup the bot logs what loaded, and says so when one fails:
-
-```
-[agent] Extensions loaded: pi-web-access
-[agent] Extension failed to load (…): …
-```
-
-### Prompt templates
-
-Drop `<name>.md` in `data/pi/prompts/` and it runs as `/<name>` in any room.
-These belong to the deployment; the bot never touches them and ships none.
-
-Adding the name to `COMMANDS` in `src/commands.js` also gives it a `.` alias,
-which is worth doing only because Element eats a leading `/`. Nothing does this
-today: the bot shipped a `.verify` for a template pi had written for itself,
-which meant advertising a command that did nothing on any other install.
-
-### Skills
-
-Drop a skill in `data/pi/skills/` and it is available as `/skill:<name>` in
-every room, once you `.reload` (or restart).
-
-### Context files — the closest thing to memory
-
-pi reads `AGENTS.md` (or `CLAUDE.md`) from two places, and both persist across
-sessions and restarts:
-
-| Location | Scope |
-| --- | --- |
-| `data/pi/AGENTS.md` | Every room, every session — the bot's standing instructions, shipped and installed (below) |
-| `$BOT_CWD/AGENTS.md`, and every ancestor directory | Project scope — and where your own instructions go |
-
-pi takes the **first** of `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`,
-`CLAUDE.md`, `CLAUDE.MD` in each directory and ignores the others, so there is
-room for one file per directory, not one per purpose.
-
-`data/pi/AGENTS.md` is the natural home for things the agent should always know.
-Note the project-scoped one follows `BOT_CWD`, so with the default under `/tmp`
-it will not survive a reboot — point `BOT_CWD` at a durable path if you intend
-to keep context there.
-
-**The bot ships its own `AGENTS.md`** and installs it there on every start, from
-`agent/` at the repo root. It tells the agent what it is: reached through a chat
-client rather than a terminal, its name and user id and working directory, one
-session per room, one run at a time, answers posted whole and never edited
-afterwards, which commands the bot handles before the agent sees them, and that
-it has no Matrix client of its own. Without it an agent answers "who are you" as
-whatever a coding agent assumes by default. It also points at
-`data/main-room.json`, so the answer names the real main room and admin instead
-of being invented, and carries the outbox protocol — including that the outbox
-is not how it replies, which cost one double-posted answer to learn.
-
-Two rules there exist because their absence produced something worse:
-
-- **Silence is answering with a single `.`**, which the bot drops. Asked for
-  "no text at all" the agent ran `bash true` twice hunting for an action that
-  does nothing, then sent `.` anyway — and `.` reached the room, because it is
-  not empty.
-- **Do not narrate what the room already watched.** Every tool call is rendered
-  into the reply with a tick when it succeeds, so "Done! Message sent." repeats
-  the screen back at the person.
-
-Anything that differs per room or per message goes in a `[context]` block in
-front of the message instead: who sent it, on every turn because it changes
-between turns, and the room's name and id on the first turn of a session. A
-message beginning with `/` carries no block at all — a prefix would stop pi
-expanding the template — which is why `AGENTS.md` tells the agent it is
-sometimes not told the sender, and never to guess one.
-
-This is a context file rather than a command on purpose. "Who are you" is a
-thing people ask in ordinary conversation, and a `.whoami` would only have
-answered when someone knew to type it.
-
-It is installed rather than symlinked so paths can be filled in — the agent runs
-in `BOT_CWD`, which is neither the repo nor `DATA_DIR`, so anything naming a path
-needs an absolute one and that differs per host. `{{DATA_DIR}}`, `{{BOT_CWD}}`,
-`{{OUTBOX_DIR}}`, `{{MATRIX_USER_ID}}` and `{{BOT_NAME}}` are substituted as the
-file is written;
-anything else is left in place and warned about, since an emptied path would read
-as a working instruction. Edit `agent/`, not the installed copy: the next start
-overwrites it.
-
-**An `AGENTS.md` the bot did not write is never touched.** The installed copy
-carries a marker line; a file without it is left exactly as it is, with a
-warning.
-
-That case is worth avoiding rather than living with. pi reads **one context file
-per directory** — the first of `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`,
-`CLAUDE.md`, `CLAUDE.MD` — so a file of yours in `data/pi/` keeps the bot's out,
-and the agent no longer knows what it is. Put your own standing instructions in
-`$BOT_CWD/AGENTS.md` instead: it is a different directory, so pi loads it as
-well as the bot's.
-
-This is distinct from conversation history, which `SESSION_DIR` persists per
-room. Context files are instructions; sessions are what was said.
 
 ## Commands
 
@@ -661,105 +154,8 @@ belong to the main room** — see below.
 so `/help` opens Element's help and never reaches the bot. A leading `/` is
 still accepted for clients that pass it through, but `.` is the reliable form.
 
-### The main room holds the controls
-
-Every command but `.info` either reconfigures the bot for *all* rooms
-(`.model`, `.thinking`, `.reload`) or reports on it (`.rooms`, `.help`). One
-agent config backs every room, so a switch made in a working room would
-reconfigure the others without their knowing, and only the room that did it
-would see the confirmation. That belongs in the bot's control channel.
-
-A working room may hold people who are not the bot's admin, so it gets `.info`
-and nothing else. Anything else there is answered with a flat
-`` `.model` is not available here. `` — no reason, and **never the main room's
-id**. Nothing outside the main room hints that one exists: `.help` does not run
-there either, so the listing above is never shown to a room that cannot use it.
-
-If no main room is established, everything is allowed rather than leaving the
-bot with one usable command.
-
-### What each one does
-
-`.info` is the whole command surface of a working room: the model, the thinking
-level, the build — `piagent-matrix 0.2.2 (b15ea83)` — and when the process
-started, with how long it has been up. It reads; it changes nothing.
-
-The uptime is computed per call, unlike the build: the point of it is that it
-moves. Between them they answer the two questions asked of a deployment — which
-code is this, and did it actually restart when I restarted it.
-
-It also lists the **extensions**, which answer the third: what can it actually
-do. Once a session exists those are the ones that initialised; before that they
-are what `settings.json` asks for, and the line says which it is showing —
-configured is not loaded, and an extension that fails to initialise is
-configured too. Failures are named. Asked to compare "the skill list", two bots
-both reported zero and agreed they matched, while one had `pi-web-access` and
-the other had nothing; this is the line that answers that in one message.
-
-The commit is there because the version cannot answer the question people
-actually ask. `package.json` is bumped once when a release opens, so every host
-between two releases reports the same number while running different code, and
-"has this one been upgraded yet?" stays unanswerable. It is read from `.git`
-rather than by running git, so there is no subprocess at startup; a deployment
-without a checkout reports the version alone, and one without `package.json`
-either reports just the name. A worktree or submodule, where `.git` is a file
-pointing elsewhere, is followed.
-
-It is read **once, at startup**, not per `.info`. Reading it live would report
-whatever is checked out now, so a host pulled but not restarted would name the
-new commit while running the old code — the one case this exists to catch. What
-it still cannot see is a tree edited in place: the commit says where the
-checkout is, not that the files match it. The same line opens the startup log.
-
-There is deliberately no caveat about whether the room has a live session:
-sessions are in-memory, so a room chatted in for days would report none after a
-restart, and the values are the same either way.
-
-`.reload` calls `AgentSession.reload()` on every live session, not just the room
-that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so
-reloading one room would leave the rest stale. Sessions and their history
-survive; only the resources are re-read. It is the restart that the *Extending
-the agent* section would otherwise require.
-
-`.rooms` answers "where has this bot been invited", which is otherwise visible
-only in the startup log. Each line gives the room's name, its id and how many
-members it has, and marks the main room. Names are written by whoever made the
-room, so they print in a code span rather than rendered — the sanitiser already
-blocks anything dangerous, but a room called `**urgent**` should not shout in
-the listing.
-
-`.rooms leave <roomId>` leaves one room, straight away. Naming an id copied out
-of the listing is deliberate on its own, so there is nothing to confirm; a
-copied pair of backticks is stripped, since the listing prints ids in code
-spans. Naming the main room's own id works too — whoever can type it there can
-kick the bot out anyway, and more easily. The goodbye goes out before the bot
-leaves, since afterwards there is no room to send it to; the record goes with
-the room, so the next fitting room becomes the control channel and is told so.
-
-There is no "leave everything" form. Leaving is visible to everyone in those
-rooms, getting back in needs a fresh invite, and the bot cannot read anything
-said while it is away — so it happens one named room at a time, where each one
-is a choice rather than a consequence of a word.
-
-The room's cached pi session is dropped as the bot goes; with `SESSION_DIR` set
-the conversation is still on disk and resumes if it is invited back.
-
-`.model` and `.thinking` are how the agent is configured — there is no env var
-for either. Bare, they report where you are and list what is on offer, since a
-room cannot present pi's selector UI. With an argument, they apply the change to
-every live session and **record it under `DATA_DIR/agent.json`**, so it survives
-a restart. A bot that has never been told starts on the first available model at
-thinking level `low`.
-
-Neither is read from the environment, on purpose. An interactive `pi` run
-exports `PI_MODEL` and `PI_PROVIDER` into the shell, so honouring them let a
-stray export decide the bot's model — invisible influence, and pointless once
-the choice is a command away.
-
-Anything unrecognised is an ordinary prompt. `/login` and `/compact`
-are deliberately **not** wired up: they need a back-and-forth a room cannot give,
-or hand a chat message more reach than it should have. pi's TUI also treats `!`
-as "run bash", which is not offered here for the same reason.
+Each is explained in **[docs/commands.md](docs/commands.md)**, including why all
+but `.info` are answered only in the main room.
 
 ## Scripts
 
@@ -768,41 +164,6 @@ as "run bash", which is not offered here for the same reason.
 | `npm start` | Run the bot |
 | `npm test` | `node --test` over `test/**/*.test.js` |
 | `npm run cross-sign [DEVICE_ID]` | Cross-sign the bot's device |
-
-## Cross-signing
-
-Without this, Element shows **"Encrypted by a device not verified by its owner"**
-on everything the bot sends. Encryption still works; the warning is about trust,
-not secrecy.
-
-Fixing it means signing the device with the account's self-signing key, which
-lives encrypted in secret storage (4S). `matrix-bot-sdk` and the rust bindings
-under it have **no secret-storage support at all**, so the bot cannot do what
-Element does. `matrix-js-sdk` can, so it is a `devDependency` used only by
-`scripts/cross-sign.js`. Nothing in `src/` imports it.
-
-```sh
-npm run cross-sign        # defaults to the device in data/token.json
-VERBOSE=1 npm run cross-sign   # full SDK/crypto logging, if it goes wrong
-```
-
-The run prints a step per phase and verifies the signature against the server,
-ending in `SUCCESS — device is cross-signed.` Some `[RustBackupManager]` and
-`sync …` lines still appear; they are informational.
-
-Run it once after any fresh login — a new device is never cross-signed. Since the
-crypto store persists, that is rare.
-
-Two things the script deliberately does:
-
-- **Logs in as a throwaway device and logs out at the end.** It must not reuse
-  the bot's access token: `matrix-js-sdk` would build its own crypto store for
-  that device id and re-upload different device keys, clobbering the identity the
-  running bot depends on.
-- **Refuses to run unless it can first read the existing self-signing key from
-  4S.** Otherwise `bootstrapCrossSigning` may mint a *replacement* identity and
-  reset trust for every session on the account. `setupNewCrossSigning` is never
-  passed, so it defaults to `false`.
 
 ## Layout
 
@@ -822,37 +183,13 @@ src/loop-guard.js       bounds a run of bots answering bots
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 agent/AGENTS.md         standing instructions that ship with the bot
 scripts/cross-sign.js   provisioning, matrix-js-sdk only
-docs/pi-integration.md  pi API notes and design decisions
+docs/                   the longer form; see Documentation below
 test/                   node:test suites
 data/                   the bot's identity          (gitignored)
 outbox/                 outgoing spool              (gitignored)
 inbox/                  incoming prompts            (gitignored)
 sessions/               per-room agent history      (gitignored)
 ```
-
-## What lives in `data/`
-
-| Path | Size | Contents |
-| --- | --- | --- |
-| `token.json` | ~140 B | `accessToken`, `deviceId`, `userId`. Mode 0600 |
-| `sync.json` | ~160 B | `syncToken` and filter state |
-| `crypto/matrix-sdk-crypto.sqlite3` | ~140 KB | Olm account, device keys, Megolm sessions |
-| `crypto/…-wal`, `…-shm` | up to a few MB | SQLite write-ahead log and shared memory |
-| `crypto/bot-sdk.json` | ~270 B | Device id and per-room encryption config (room ids hashed) |
-
-- **A multi-megabyte `-wal` file is normal**, not bloat. SQLite journals there
-  while the bot holds the database open and checkpoints it back.
-- **`token.json` and `crypto/` are a matched pair.** The token binds to a device
-  and that device's keys live in the store. Delete one without the other and the
-  bot loses its identity: it logs in fresh, gets a new device, and needs
-  `npm run cross-sign` again.
-- **Never run two instances against the same `data/`.** Concurrent access to one
-  crypto store causes corruption and decryption failures.
-- **Only `token.json` is mode 0600.** The crypto store holds this device's
-  private keys but is created world-readable. On a shared machine:
-  `chmod -R go-rwx data/`.
-- Backing up `data/` backs up live credentials and private keys — treat it like
-  `.env.local`.
 
 ## Blast radius
 
@@ -868,22 +205,21 @@ allowlist means everyone**. Set it. Scope `BOT_CWD` to the narrowest useful
 directory, and consider passing an explicit `tools` allowlist to
 `createAgentSession` if the full toolset is more than the job needs.
 
-## Known gaps
+## Documentation
 
-- Events predating startup are not filtered. Harmless while `sync.json` persists
-  the sync token, but clearing `data/` makes the bot replay old history — which
-  now means *executing* it, not echoing it.
-- No timeout on an agent run. A wedged run holds its room's queue until the
-  process restarts.
-- The `M_NOT_FOUND` log filter drops *every* such error from `MatrixHttpClient`,
-  not just the expected encryption-state probe.
-- Sessions are never evicted from memory; the map only grows.
-- The bot-to-bot limit is per process: restarting clears the counters, so a pair
-  mid-runaway resumes with a fresh allowance.
-- `BOT_CWD` in the committed `.env` is an absolute path from one machine.
-- `matrix-bot-sdk` depends on the deprecated `request`, which carries
-  unpatchable advisories including a critical one in `form-data`. Practical
-  exposure is low for a text-only bot talking to a homeserver you control.
+| | |
+| --- | --- |
+| [Configuration](docs/configuration.md) | every environment variable, and why the crypto binding needs an install script |
+| [Model providers](docs/model-providers.md) | the three ways to give the agent a provider, and how to check one resolved |
+| [Commands](docs/commands.md) | what each command does, and why the main room holds the controls |
+| [Spools](docs/spools.md) | the outbox (text to post) and the inbox (work to do) |
+| [The main room](docs/main-room.md) | how the bot adopts a control channel, checks it, and repairs it |
+| [More than one bot in a room](docs/multi-bot.md) | `m.notice`, and bounding a run of bots answering bots |
+| [Extending the agent](docs/extending.md) | extensions, skills, prompt templates, and the shipped `AGENTS.md` |
+| [Running it](docs/operations.md) | cross-signing, what lives in `data/`, known gaps |
+| [pi integration](docs/pi-integration.md) | pi API notes and the behaviour that is easy to get wrong |
+| [SECURITY.md](SECURITY.md) | blast radius, and the dependency advisories |
+| [Releases](RELEASES.md) · [blog](docs/blog/) | what changed, and a few things worth writing up |
 
 ## Roadmap
 

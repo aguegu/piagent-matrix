@@ -2,6 +2,10 @@
 
 ## 0.2.3 (in progress)
 
+### Documentation
+
+* The README is a front page again: what it is, how it works, getting started, troubleshooting, the command table, and a map of the rest. It had grown to 894 lines, so the reference material moved into `docs/` — configuration, model providers, commands, spools, the main room, multi-bot rooms, extending, and running it. Three paragraphs that repeated Getting started went with it
+
 ### New Features
 
 * **An inbox** (`src/inbox.js`): a spool whose files are run as prompts, so a cron job or a script can give the agent work. Only the reply is posted; the prompt is not. Reaching for the outbox instead fails quietly and did — a scheduled cue was posted to the room as the bot, and a bot ignores its own messages, so the instruction was seen by everyone except the agent it was addressed to. Takes `{"prompt", "room"?, "from"?}` or a plain `.txt`; a file carrying `body` is parked with a note saying it belongs in the outbox
