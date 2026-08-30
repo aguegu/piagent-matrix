@@ -279,6 +279,7 @@ async function runCommand(command, { agent, client, roomId, sender }) {
         `Thinking: \`${thinking.current}\``,
         `Build: \`${BUILD}\``,
         `Started: \`${describeStart()}\``,
+        describeExtensionLine(agent.describeExtensions()),
       ].join("\n"),
     ));
     return;
@@ -501,6 +502,21 @@ async function describeRoom(client, roomId) {
   const members = await roomMembers(client, roomId);
   const count = members ? `${members.length} member${members.length === 1 ? "" : "s"}` : "members unknown";
   return `${name ? `\`${name}\` ` : ""}\`${roomId}\` — ${count}`;
+}
+
+/**
+ * The extensions line for `.info`.
+ *
+ * Says whether it is reporting what loaded or only what is configured. Two bots
+ * once compared their (empty) skill directories, agreed they matched, and
+ * differed entirely in the tools they had — this is the line that answers that
+ * question directly.
+ */
+function describeExtensionLine({ names, failed, live }) {
+  const kind = live ? "Extensions" : "Extensions (configured, not loaded yet)";
+  const list = names.length ? names.map((n) => `\`${n}\``).join(", ") : "none";
+  const bad = failed.length ? ` — failed: ${failed.map((n) => `\`${n}\``).join(", ")}` : "";
+  return `${kind}: ${list}${bad}`;
 }
 
 /** Members of a room, or null when the lookup fails. */

@@ -2,6 +2,10 @@
 
 ## 0.2.3 (in progress)
 
+### New Features
+
+* `.info` lists the extensions the bot is running — the ones that initialised once a session exists, and otherwise what `settings.json` asks for, saying which of the two it is showing. Failures are named. Extensions are where the agent's tools come from, and nothing reported them: asked to compare "the skill list", two bots both found zero skills and concluded they were identical, while one had `pi-web-access` and the other had none
+
 ## 0.2.2 (2026-08-29)
 
 The agent learns what it is, who it is, and who is talking to it. Almost all of

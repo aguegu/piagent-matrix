@@ -590,7 +590,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model, thinking level, build and uptime |
+| `.info` | any room | Shows the model, thinking level, build, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
@@ -627,6 +627,14 @@ started, with how long it has been up. It reads; it changes nothing.
 The uptime is computed per call, unlike the build: the point of it is that it
 moves. Between them they answer the two questions asked of a deployment — which
 code is this, and did it actually restart when I restarted it.
+
+It also lists the **extensions**, which answer the third: what can it actually
+do. Once a session exists those are the ones that initialised; before that they
+are what `settings.json` asks for, and the line says which it is showing —
+configured is not loaded, and an extension that fails to initialise is
+configured too. Failures are named. Asked to compare "the skill list", two bots
+both reported zero and agreed they matched, while one had `pi-web-access` and
+the other had nothing; this is the line that answers that in one message.
 
 The commit is there because the version cannot answer the question people
 actually ask. `package.json` is bumped once when a release opens, so every host

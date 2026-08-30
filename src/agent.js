@@ -51,6 +51,8 @@ export class AgentManager {
     this.stateFile = opts.stateFile ? resolve(opts.stateFile) : null;
     /** @type {Map<string, Promise<import('@earendil-works/pi-coding-agent').AgentSession>>} */
     this.sessions = new Map();
+    /** What actually loaded, once a session has been created. */
+    this.extensions = null;
     /** Per-room tail of the run chain, so prompts never overlap. @type {Map<string, Promise<void>>} */
     this.chains = new Map();
     /** Per-room count of messages queued or running. @type {Map<string, number>} */
@@ -226,11 +228,16 @@ export class AgentManager {
       // load is silent.
       const loaded = result.extensionsResult?.extensions ?? [];
       const failed = result.extensionsResult?.errors ?? [];
+      // Kept so `.info` can report what is actually running rather than what
+      // settings.json asks for. Two bots comparing notes found their skill
+      // directories equally empty and concluded they matched, while one had
+      // pi-web-access and the other had nothing.
+      this.extensions = {
+        names: loaded.map(extensionName),
+        failed: failed.map(extensionName),
+      };
       if (loaded.length) {
-        LogService.info(
-          "agent",
-          `Extensions loaded: ${loaded.map((e) => e.name ?? e.path ?? "?").join(", ")}`,
-        );
+        LogService.info("agent", `Extensions loaded: ${loaded.map(extensionName).join(", ")}`);
       }
       for (const e of failed) {
         LogService.error("agent", `Extension failed to load (${e.path}): ${e.error}`);
@@ -444,6 +451,32 @@ export class AgentManager {
   }
 
   /**
+   * The extensions this bot is running, as far as it can know.
+   *
+   * Once a session exists, what actually initialised. Before that, what
+   * `settings.json` asks for — marked as such, because configured is not the
+   * same as loaded and the difference is exactly what goes wrong.
+   *
+   * @returns {{ names: string[], failed: string[], live: boolean }}
+   */
+  describeExtensions() {
+    if (this.extensions) return { ...this.extensions, live: true };
+    return { names: this.#configuredPackages(), failed: [], live: false };
+  }
+
+  /** `packages` from settings.json, named the way a person would say them. */
+  #configuredPackages() {
+    if (!this.agentDir) return [];
+    try {
+      const settings = JSON.parse(readFileSync(resolve(this.agentDir, "settings.json"), "utf8"));
+      const packages = Array.isArray(settings?.packages) ? settings.packages : [];
+      return packages.map((p) => String(p).replace(/^npm:/, ""));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * The model in use for a room, and everything available.
    *
    * A room never messaged has no session yet, so it reports the manager's
@@ -588,6 +621,22 @@ export class AgentManager {
     }
     this.sessions.clear();
   }
+}
+
+/**
+ * A readable name for a loaded extension.
+ *
+ * pi reports a path where an extension declares no name of its own, and that
+ * path is the whole install location — so the useful part is the package it
+ * came from, scope included.
+ */
+export function extensionName(e) {
+  if (e?.name) return String(e.name);
+  const path = String(e?.path ?? "");
+  const at = path.lastIndexOf("node_modules/");
+  if (at < 0) return path || "?";
+  const parts = path.slice(at + "node_modules/".length).split("/");
+  return parts[0].startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
 }
 
 /**

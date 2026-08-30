@@ -132,3 +132,52 @@ describe("telling extensions where the agent directory is", () => {
     }
   });
 });
+
+describe("reporting which extensions are running", () => {
+  it("names a package from its install path", async () => {
+    // pi reports a path when an extension declares no name of its own, and the
+    // path is the whole install location.
+    const { extensionName } = await import("../src/agent.js");
+    assert.equal(
+      extensionName({ path: "/srv/bot/data/pi/npm/node_modules/pi-web-access/index.ts" }),
+      "pi-web-access",
+    );
+    assert.equal(
+      extensionName({ path: "/srv/bot/data/pi/npm/node_modules/@smoose/pi-persona/extensions/index.ts" }),
+      "@smoose/pi-persona",
+      "scope included",
+    );
+    assert.equal(extensionName({ name: "declared" }), "declared", "its own name wins");
+    assert.equal(extensionName({}), "?");
+  });
+
+  it("falls back to what settings.json configures, and says so", () => {
+    // Configured is not loaded, and the difference is what goes wrong: two bots
+    // agreed their skill lists matched while their tools did not.
+    const dir = mkdtempSync(join(tmpdir(), "agentdir-"));
+    dirs.push(dir);
+    writeFileSync(join(dir, "settings.json"), JSON.stringify({
+      packages: ["npm:pi-web-access", "https://github.com/x/y@abc"],
+    }));
+
+    const mgr = new AgentManager({ cwd: process.cwd(), agentDir: dir });
+    assert.deepEqual(mgr.describeExtensions(), {
+      names: ["pi-web-access", "https://github.com/x/y@abc"],
+      failed: [],
+      live: false,
+    });
+  });
+
+  it("reports what loaded once a session has been made", () => {
+    const mgr = new AgentManager({ cwd: process.cwd() });
+    mgr.extensions = { names: ["pi-web-access"], failed: ["broken-one"] };
+    assert.deepEqual(mgr.describeExtensions(), {
+      names: ["pi-web-access"], failed: ["broken-one"], live: true,
+    });
+  });
+
+  it("says nothing rather than guessing with no agent dir", () => {
+    assert.deepEqual(new AgentManager({ cwd: process.cwd() }).describeExtensions(),
+      { names: [], failed: [], live: false });
+  });
+});
