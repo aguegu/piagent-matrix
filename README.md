@@ -356,6 +356,13 @@ A `.json` in the inbox carrying `body` instead of `prompt` is parked with a
 message saying which spool it belongs in, rather than running someone's
 announcement as an instruction.
 
+**Choose by who has to think.** A script that can produce the finished text —
+disk usage, a service's status, a count — should write it to the outbox: no
+model runs, it costs nothing, and it still reports when the agent is busy or
+wedged. The inbox is for when producing the text needs judgement or a tool the
+shell does not have. `hourly-stats.sh` is the first kind; a weather report that
+wants a real search rather than scraping whatever `curl` returns is the second.
+
 **Anything that can write to either directory can drive the bot** — the outbox
 speaks as it, the inbox thinks as it. See [SECURITY.md](SECURITY.md).
 

@@ -81,6 +81,13 @@ Inbox files take `{"prompt": "...", "room"?: "<room id>", "from"?: "what set
 this off"}`, or a plain `.txt` whose whole contents are the prompt. Same rules
 as below: write elsewhere, `rename()` in, name it `<timestamp>-<label>.json`.
 
+**Choose by who has to think.** If a shell script can produce the finished text
+— disk usage, a service's status, a count — have it write that to the outbox.
+That runs with no model behind it, costs nothing, and still works when you are
+busy or broken. Use the inbox when producing the text needs judgement or a tool
+you have and a script does not, such as searching the web: then the job is to
+wake you, and the reply is the report.
+
 For text to post — a report, a notification — drop a file in `{{OUTBOX_DIR}}`
 and the running bot delivers it:
 
