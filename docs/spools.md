@@ -72,7 +72,7 @@ instruction and the one agent it was meant for does not.
 ```sh
 # what does: the file is the prompt, and only the reply is posted
 tmp=$(mktemp)
-echo '{"room":"!r:example.org","prompt":"fetch the weather for Gulou, Fuzhou and post a brief report","from":"the hourly weather cron"}' > "$tmp"
+echo '{"room":"!r:example.org","prompt":"fetch the weather for <your city> and post a brief report","from":"the hourly weather cron"}' > "$tmp"
 mv "$tmp" "$INBOX/$(date +%s)-weather.json"
 ```
 

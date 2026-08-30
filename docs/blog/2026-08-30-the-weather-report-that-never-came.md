@@ -3,7 +3,8 @@
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 
-*The two bots are called `bot-a` and `bot-b` here. Their conversations are
+*The two bots are called `bot-a` and `bot-b` here, and the place aguegu asked
+about is written as `[his district]`. Otherwise the conversations and scripts are
 quoted as recorded.*
 
 aguegu wanted one of the bots to post a weather report for his neighbourhood
@@ -53,7 +54,7 @@ reads the output. A weather script does not. Somebody has to go and find out.
 aguegu's script dropped this into the folder:
 
 > [cron trigger] bot-b: this is your scheduled cue. Fetch current weather for
-> Gulou, Fuzhou, China and post a brief weather report to this room. Do not stay
+> `[his district]` and post a brief weather report to this room. Do not stay
 > silent.
 
 Read that as an instruction to a colleague and it is perfectly clear. Read it as
@@ -130,7 +131,7 @@ it was never meant for the room.
 
 The script becomes:
 
-> Fetch current weather for Gulou, Fuzhou and post a brief report.
+> Fetch current weather for `[his district]` and post a brief report.
 
 and that is all. "Do not stay silent" is unnecessary now. There is no decision to
 make: a request is work, not a message to be judged.
@@ -201,7 +202,7 @@ is worth remembering before acting on their reports about their own plumbing.
 The weather job on this machine was rewritten, again by the bot, and it now
 opens like this:
 
-> Hourly Gulou, Fuzhou weather. Drops a request for the bot; the harness picks
+> Hourly `[his district]` weather. Drops a request for the bot; the harness picks
 > it up, invokes the agent, and the agent fetches the forecast and posts to the
 > room.
 
