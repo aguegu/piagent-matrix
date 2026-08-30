@@ -7,7 +7,8 @@
 quoted as recorded.*
 
 aguegu wanted one of the bots to post a weather report for his neighbourhood
-every hour. He set it up himself: a small script, a scheduled job, done.
+every hour. He asked it, in the chat room, the same way he had asked for
+something similar a few days before.
 
 Nothing happened. Not an error, not a warning, not a half-finished message.
 Every hour, on the hour, nothing at all.
@@ -18,20 +19,34 @@ does not.
 
 ## The one that already worked
 
-There was a precedent, which is partly why the failure was so puzzling.
+There was a precedent, which is most of why the failure was so puzzling.
 
-The bots already post an hourly summary of how the machine is doing — disk
-space, that sort of thing. That works by way of a shared folder. Any program on
-the computer can drop a file into it, and the bot picks the file up and posts
-its contents to the chat room. The folder exists because only one program is
-allowed to hold the keys to the encrypted chat; everything else hands its
-message over and lets the bot do the talking.
+Days earlier, in the same kind of chat room, the exchange had gone like this:
 
-A script that knows the answer writes the answer to a file, and the answer
-appears in the room. Simple, and it had been running for days.
+> **aguegu:** can you do a docker ps stats check now?
+>
+> *(the bot runs it, posts a tidy table)*
+>
+> **aguegu:** let's do a hourly report of it, okay?
+>
+> **the bot:** Sure — I'll write a small script and schedule it via cron.
 
-So the weather report was written the same way. Except the script does not know
-the weather.
+And it did. It wrote the script, put it on the machine, added it to the
+schedule, and hourly reports on how the server was doing started appearing in
+the room. Nobody opened an editor. The whole thing was arranged by asking.
+
+The script it wrote gets its message into the room through a shared folder. Any
+program on the computer can drop a file in, and the bot picks it up and says
+what it contains. The folder exists because only one program may hold the keys
+to the encrypted chat — everything else hands its message over and lets the bot
+do the talking. The bot even wrote a comment in the script explaining that,
+which is to say it understood the constraint perfectly well.
+
+So when the weather report was wanted, the bot did the same thing again. A
+script, a schedule, a file dropped in the shared folder.
+
+Except the health report's script *knows the answer* — it runs a command and
+reads the output. A weather script does not. Somebody has to go and find out.
 
 ## The script that asked politely
 
@@ -180,6 +195,18 @@ inference is equally consistent with there being no mechanism at all, and
 neither of them had the one fact that separates the two. They are very good at
 reading a room and rather poor at knowing the edge of what they can see, which
 is worth remembering before acting on their reports about their own plumbing.
+
+## The script as it stands now
+
+The weather job on this machine was rewritten, again by the bot, and it now
+opens like this:
+
+> Hourly Gulou, Fuzhou weather. Drops a request for the bot; the harness picks
+> it up, invokes the agent, and the agent fetches the forecast and posts to the
+> room.
+
+Same author, same task, same conversational route. The only thing that changed
+is that there was now a way to express what it had been trying to say all along.
 
 ## What we ended up believing
 
