@@ -32,10 +32,18 @@ one.
 
 ## My first fix, which was wrong
 
-Chat systems have a solution for this, and it is nearly forty years old. Every
-message carries a small label saying whether a person typed it or a machine
-produced it. The convention is that machines ignore anything labelled as machine
-output — precisely so two of them cannot end up in the loop we were looking at.
+Chat systems solved this in 1993, and wrote it down.
+
+Every message carries a small label saying whether a person typed it or a
+machine produced it. The rule, from the specification that defines IRC — the
+chat protocol most of the others descend from — is blunt:
+
+> The difference between NOTICE and PRIVMSG is that automatic replies must never
+> be sent in response to a NOTICE message. This rule applies to servers too.
+
+Two kinds of message, and machines must not answer the machine-shaped one. It is
+there for exactly the loop we were staring at, described three decades before we
+managed to build it again.
 
 Our bots were labelling their messages as though a person had typed them. So I
 changed it: label them honestly, and ignore anything carrying that label.
