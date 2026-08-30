@@ -102,7 +102,7 @@ describe("installing the bot's standing instructions", () => {
     // Guards the pairing between agent/*.md and the values index.js passes.
     const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
     const used = [...new Set([...shipped.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].sort();
-    assert.deepEqual(used, ["BOT_CWD", "BOT_NAME", "DATA_DIR", "MATRIX_USER_ID", "OUTBOX_DIR"]);
+    assert.deepEqual(used, ["BOT_CWD", "BOT_NAME", "DATA_DIR", "INBOX_DIR", "MATRIX_USER_ID", "OUTBOX_DIR"]);
   });
 
   it("ships an AGENTS.md that tells the agent where its record is", () => {

@@ -47,6 +47,12 @@ Consequences worth being explicit about:
   view of a room matches everyone else's — bounded to the last few, truncated. That bounds the
   cost of a runaway, not who may cause one — the allowlist is what decides who
   may drive the agent.
+- **The spools are as powerful as a message.** Anything that can write to
+  `OUTBOX_DIR` speaks as the bot; anything that can write to `INBOX_DIR` gives
+  the agent instructions, which is the same reach as sending it a message —
+  shell included, and without passing the allowlist, which only governs Matrix
+  senders. Both default under the repo; put them somewhere only the bot's user
+  can write.
 - **`BOT_CWD` is not a security boundary.** It sets the agent's working
   directory, so relative paths and file searches resolve there — useful hygiene,
   but the shell is not chrooted and absolute paths reach anything the bot's user

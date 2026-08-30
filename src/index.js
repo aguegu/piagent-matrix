@@ -27,6 +27,7 @@ import { withTyping } from "./status.js";
 import { renderMarkdown } from "./markdown.js";
 import { AgentManager } from "./agent.js";
 import { startOutbox } from "./outbox.js";
+import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
@@ -153,6 +154,7 @@ function isAllowed(sender) {
 let agentPromise = null;
 let botClient = null;
 let stopOutbox = null;
+let stopInbox = null;
 /** @type {MainRoom | null} */
 let mainRoom = null;
 /** roomId -> whoever invited the bot, for invites seen this run. */
@@ -171,6 +173,7 @@ async function shutdown(signal) {
   LogService.info("bot", `Received ${signal}, shutting down.`);
   try {
     stopOutbox?.();
+    stopInbox?.();
   } catch {
     /* ignore */
   }
@@ -661,6 +664,7 @@ async function main() {
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),
+    INBOX_DIR: resolve(config.get("inbox.dir")),
     MATRIX_USER_ID: userId,
     // The localpart, which is what a person calls it: @bk18pi:example.org is
     // bk18pi. Given rather than derived, so an introduction does not depend on
@@ -747,6 +751,18 @@ async function main() {
   stopOutbox = startOutbox(client, {
     dir: resolve(outboxCfg.dir),
     defaultRoom: () => mainRoom.roomId,
+  });
+
+  // The other direction: a file here is work for the agent, not a message. Its
+  // reply is posted the ordinary way; the prompt itself never is.
+  stopInbox = startInbox({
+    dir: resolve(config.get("inbox.dir")),
+    defaultRoom: () => mainRoom.roomId,
+    deliver: async ({ roomId, prompt, from }) => {
+      const agent = await getAgent();
+      await withTyping(client, roomId, () =>
+        agent.handleMessage({ roomId, text: prompt, sender: from, client }));
+    },
   });
 
   // Make sure agent + sync are torn down cleanly. The handoff flagged

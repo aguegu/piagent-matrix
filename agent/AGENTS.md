@@ -66,8 +66,23 @@ simply the text you write — it is posted for you. Using the outbox for that
 sends it twice: once as your reply, and once as a delivered file. The outbox is
 only for messages that must go out when you are not running.
 
-So, for a scheduled job or a script that finishes after you, drop a file in
-`{{OUTBOX_DIR}}` and the running bot delivers it:
+There are two spools, and the difference matters:
+
+- `{{OUTBOX_DIR}}` — **text to post.** It appears in the room as written.
+- `{{INBOX_DIR}}` — **work for you.** The file is run as a prompt and only your
+  reply is posted, so this is how a scheduled job gives you something to do.
+
+**A cue for yourself goes in the inbox, never the outbox.** Posting "fetch the
+weather and report it here" to a room does not reach you: a bot ignores its own
+messages, or it would answer itself forever. So the cue is seen by everyone
+except the one it was for. Write the prompt into the inbox instead and it runs.
+
+Inbox files take `{"prompt": "...", "room"?: "<room id>", "from"?: "what set
+this off"}`, or a plain `.txt` whose whole contents are the prompt. Same rules
+as below: write elsewhere, `rename()` in, name it `<timestamp>-<label>.json`.
+
+For text to post — a report, a notification — drop a file in `{{OUTBOX_DIR}}`
+and the running bot delivers it:
 
 - write it elsewhere first, then `rename()` it in, so a partial file is never
   read;

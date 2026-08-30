@@ -10,6 +10,7 @@ sessions/
 .env.*.local
 v1-archive/
 outbox/
+inbox/
 workspace/
 
 # Editor swap/backup files. A swap of .env.local would contain the Matrix

@@ -4,6 +4,9 @@
 
 ### New Features
 
+* **An inbox** (`src/inbox.js`): a spool whose files are run as prompts, so a cron job or a script can give the agent work. Only the reply is posted; the prompt is not. Reaching for the outbox instead fails quietly and did — a scheduled cue was posted to the room as the bot, and a bot ignores its own messages, so the instruction was seen by everyone except the agent it was addressed to. Takes `{"prompt", "room"?, "from"?}` or a plain `.txt`; a file carrying `body` is parked with a note saying it belongs in the outbox
+* The spool mechanics both directions share — claiming by rename, filename order, parking a crash's claim rather than repeating work, `fs.watch` backed by a poll — moved to `src/spool.js`. The outbox behaves exactly as before, which its tests establish
+
 * `.info` lists the extensions the bot is running — the ones that initialised once a session exists, and otherwise what `settings.json` asks for, saying which of the two it is showing. Failures are named. Extensions are where the agent's tools come from, and nothing reported them: asked to compare "the skill list", two bots both found zero skills and concluded they were identical, while one had `pi-web-access` and the other had none
 
 ## 0.2.2 (2026-08-29)

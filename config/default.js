@@ -40,6 +40,13 @@ export default {
     dir: process.env.OUTBOX_DIR || "./outbox",
     // Unaddressed *.txt drops go to the main room; see src/main-room.js.
   },
+  // The other direction: files here are run as prompts, and only the agent's
+  // reply is posted. The outbox cannot do this — a bot ignores its own
+  // messages, so a cue posted through it reaches everyone except the agent it
+  // was meant for.
+  inbox: {
+    dir: process.env.INBOX_DIR || "./inbox",
+  },
   agent: {
     // What a bot that has never been told starts with. Both are runtime
     // settings now: `.model` and `.thinking` in the main room record a choice
