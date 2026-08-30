@@ -122,6 +122,39 @@ the thing you most wanted to say out loud.
 That is the line. **Observation replaces configuration. It does not replace a
 decision.**
 
+## Stating the survivors once
+
+Thirteen variables still have to come from somewhere, and how you ask for them
+is the same question one layer down.
+
+The usual convention is a committed `.env.example` that you copy to a gitignored
+`.env` and fill in. It has a quiet failure: the example is not loaded by
+anything. Nothing breaks when it drifts from the code, so a key added upstream
+is a key your copy silently lacks, and a default written in the example is a
+default nobody verifies. You maintain a document that impersonates
+configuration.
+
+This project uses `dotenv-flow` instead. The committed `.env` *is* loaded: it
+holds every key, the comments explaining them, and the six defaults that are
+genuinely defaults —
+
+```
+DATA_DIR=./data          SESSION_DIR=./sessions      OUTBOX_DIR=./outbox
+BOT_CWD=/tmp/…           INBOX_DIR=./inbox           LOG_LEVEL=info
+```
+
+— while `.env.local`, gitignored, holds only what a given host *differs* on.
+Real environment variables win over both.
+
+Two things follow. A default that is wrong is wrong for everyone including the
+developer, so it gets found. And a new key arrives with its default on `git
+pull` — nobody has to notice it appeared and merge it into a private copy,
+because the private copy is a set of overrides rather than a duplicate.
+
+Which is the same principle as the rest of this post, one level down: state the
+difference, not the whole thing. `.env.example` asks each operator to restate
+the entire configuration in order to change one line of it.
+
 ## What it costs
 
 Recorded state has an obligation that a variable does not: it has to be able to
