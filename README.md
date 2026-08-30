@@ -18,7 +18,8 @@ Matrix room ──► room.message ──► allowlist ──► AgentManager �
                                      ▼                              ▼
                              one formatted reply ◄──────────── buffered blocks
 
-cron / scripts ──► outbox/ spool ──► the running bot ──► Matrix
+cron / scripts ──► outbox/ spool ──► the running bot ──► Matrix   (text to post)
+cron / scripts ──► inbox/  spool ──► AgentManager ────────► Matrix   (work to do)
 ```
 
 - **One pi session per room.** Rooms are the conversation boundary; with
@@ -29,7 +30,8 @@ cron / scripts ──► outbox/ spool ──► the running bot ──► Matri
 - **Progress is a typing indicator**, not a placeholder message. Nothing is
   posted until the run finishes, and replies are never edited after the fact.
 - **Only this process touches the crypto store.** Anything else that needs to
-  post goes through the outbox.
+  post goes through the outbox — and anything that needs the *agent* goes
+  through the inbox, whose files are run as prompts.
 - **Bots can hear each other.** The bot sends `m.notice` and accepts it, so two
   agents in a room can talk; a run of automated messages with nobody else
   speaking stops after three, and a person speaking resumes it.
@@ -301,9 +303,11 @@ main room happens to be then; a `*.json` lands where it was addressed.
 Unaddressed `*.txt` drops go to the bot's **main room** (below). `*.json` drops
 naming their own room always work, main room or not.
 
-The agent is told its own room id and this protocol on the first prompt of each
-session, so asking it to "post a report here every hour" produces a `*.json`
-drop addressed to that room rather than a `*.txt` that lands in the default.
+The agent is told this protocol in its shipped `AGENTS.md`, which pi reads every
+turn, so asking it to "post a report here every hour" produces a `*.json` drop
+addressed to that room rather than a `*.txt` that lands in the default. The
+per-message context block carries only what changes: who is speaking, and the
+room on the first turn of a session.
 
 Files are processed in filename order, so a timestamp prefix preserves ordering.
 Messages spooled while the bot is down go out on the next start. A failed send is
@@ -391,7 +395,7 @@ room that became its control channel:
 ```json
 {
   "roomId": "!abc:example.org",
-  "admin": "@agu:example.org",
+  "admin": "@admin:example.org",
   "recordedBecause": "first room that fits"
 }
 ```
@@ -501,8 +505,8 @@ conversation stays its job rather than the counter's.
 The log marks which is which, so a transcript can be read back:
 
 ```
-< [e2ee] [bot] @bk15pi:matrix.example.org: "..."   counted toward the limit
-< [e2ee] @agu:matrix.example.org: "..."            a person; resets it
+< [e2ee] [bot] @otherbot:example.org: "..."   counted toward the limit
+< [e2ee] @admin:example.org: "..."            a person; resets it
 ```
 
 None of this is access control. `m.notice` is a convention a hostile or careless
@@ -705,10 +709,11 @@ It is read **once, at startup**, not per `.info`. Reading it live would report
 whatever is checked out now, so a host pulled but not restarted would name the
 new commit while running the old code — the one case this exists to catch. What
 it still cannot see is a tree edited in place: the commit says where the
-checkout is, not that the files match it. The same line opens the startup log. Deliberately no caveat about
-whether the room has a live session — sessions are in-memory, so a room chatted
-in for days would report none after a restart, and the values are the same
-either way.
+checkout is, not that the files match it. The same line opens the startup log.
+
+There is deliberately no caveat about whether the room has a live session:
+sessions are in-memory, so a room chatted in for days would report none after a
+restart, and the values are the same either way.
 
 `.reload` calls `AgentSession.reload()` on every live session, not just the room
 that asked — extensions and prompts live in the shared `PI_AGENT_DIR`, so
@@ -821,6 +826,7 @@ docs/pi-integration.md  pi API notes and design decisions
 test/                   node:test suites
 data/                   the bot's identity          (gitignored)
 outbox/                 outgoing spool              (gitignored)
+inbox/                  incoming prompts            (gitignored)
 sessions/               per-room agent history      (gitignored)
 ```
 
@@ -884,7 +890,7 @@ directory, and consider passing an explicit `tools` allowlist to
 - [x] Persistent crypto store, E2EE, restart survival, cross-signing
 - [x] `config` + `dotenv-flow`
 - [x] pi agent wired in, per-room sessions and serialization
-- [x] Outbox for other processes
+- [x] Outbox for other processes, and an inbox that gives the agent work
 - [x] Markdown replies
 - [x] A main room that adopts, verifies and repairs itself
 - [x] Commands in Matrix, with the controls held to the main room
