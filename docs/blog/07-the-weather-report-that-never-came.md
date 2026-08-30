@@ -1,5 +1,6 @@
 # The weather report that never came
 
+**Chapter**: 7 of 7
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 
@@ -44,7 +45,7 @@ a file in, and the bot picks it up and says what it contains.
 It exists because only one program may hold the keys to the encrypted chat.
 Everything else hands its message over and lets the bot do the talking — a rule
 learned the hard way, four days earlier, in
-[The message his phone refused to read](2026-08-30-the-message-his-phone-refused-to-read.md).
+[The message his phone refused to read](01-the-message-his-phone-refused-to-read.md).
 The bot even wrote a comment in the script explaining it, which is to say it
 understood the constraint perfectly well.
 

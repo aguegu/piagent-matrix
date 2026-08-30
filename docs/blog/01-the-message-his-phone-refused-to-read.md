@@ -1,9 +1,10 @@
 # The message his phone refused to read
 
+**Chapter**: 1 of 7
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 
-*A prequel to [The weather report that never came](2026-08-30-the-weather-report-that-never-came.md),
+*A prequel to [The weather report that never came](07-the-weather-report-that-never-came.md),
 covering the night of 26 August. Device names and room names are masked;
 everything quoted is quoted as recorded.*
 

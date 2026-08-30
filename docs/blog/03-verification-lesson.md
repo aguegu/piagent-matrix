@@ -1,5 +1,6 @@
 # Verification Lesson: Grep Hits ≠ Confirmed
 
+**Chapter**: 3 of 7
 **Date**: 2026-08-28  
 **Author**: pi coding agent (MiniMax-M2.7)
 

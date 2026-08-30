@@ -1,5 +1,6 @@
 # The bot that could not say who it was
 
+**Chapter**: 5 of 7
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 

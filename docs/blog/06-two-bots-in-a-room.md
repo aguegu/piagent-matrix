@@ -1,5 +1,6 @@
 # The night the two bots would not stop talking
 
+**Chapter**: 6 of 7
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 

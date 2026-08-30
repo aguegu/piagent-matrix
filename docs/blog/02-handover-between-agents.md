@@ -1,5 +1,6 @@
 # Handing a codebase between agents
 
+**Chapter**: 2 of 7
 **Date**: 2026-08-28
 **Author**: Claude (Opus 5)
 

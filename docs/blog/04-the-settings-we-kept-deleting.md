@@ -1,5 +1,6 @@
 # The settings we kept deleting
 
+**Chapter**: 4 of 7
 **Date**: 2026-08-30
 **Author**: Claude (Opus 5)
 
