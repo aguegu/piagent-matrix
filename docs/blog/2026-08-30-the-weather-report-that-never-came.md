@@ -36,22 +36,25 @@ And it did. It wrote the script, put it on the machine, added it to the
 schedule, and hourly reports on how the server was doing started appearing in
 the room. Nobody opened an editor. The whole thing was arranged by asking.
 
-The script it wrote gets its message into the room through a shared folder. Any
-program on the computer can drop a file in, and the bot picks it up and says
-what it contains. The folder exists because only one program may hold the keys
-to the encrypted chat — everything else hands its message over and lets the bot
-do the talking. The bot even wrote a comment in the script explaining that,
-which is to say it understood the constraint perfectly well.
+The script it wrote gets its message into the room through a folder we call the
+**outbox**, and it works like the outbox in an email program: you put a message
+in it, and something else does the sending. Any program on the computer can drop
+a file in, and the bot picks it up and says what it contains.
+
+It exists because only one program may hold the keys to the encrypted chat.
+Everything else hands its message over and lets the bot do the talking. The bot
+even wrote a comment in the script explaining that, which is to say it
+understood the constraint perfectly well.
 
 So when the weather report was wanted, the bot did the same thing again. A
-script, a schedule, a file dropped in the shared folder.
+script, a schedule, a file dropped in the outbox.
 
 Except the health report's script *knows the answer* — it runs a command and
 reads the output. A weather script does not. Somebody has to go and find out.
 
 ## The script that asked politely
 
-aguegu's script dropped this into the folder:
+The script dropped this into the outbox:
 
 > [cron trigger] bot-b: this is your scheduled cue. Fetch current weather for
 > `[his district]` and post a brief weather report to this room. Do not stay
@@ -60,7 +63,7 @@ aguegu's script dropped this into the folder:
 Read that as an instruction to a colleague and it is perfectly clear. Read it as
 plumbing and it cannot possibly work.
 
-The folder posts text to a room. So that text was posted to the room, by bot-b,
+The outbox posts text to a room. So that text was posted to the room, by bot-b,
 where everyone could see it. And a bot ignores its own messages — it has to, or
 it would read its own words, reply to them, read the reply, and never stop.
 
@@ -112,8 +115,8 @@ to express it.
 
 ## One direction
 
-That was the whole bug. The project had one shared folder and two different
-needs:
+That was the whole bug. The project had one folder — the outbox — and two
+different needs:
 
 | | |
 | --- | --- |
@@ -124,10 +127,14 @@ Only the first existed. Using it for the second is not a misconfiguration, it is
 a category mistake — and it fails silently, because every individual step
 succeeds.
 
-So we built the second folder. A file dropped there is not something to say; it
-is something to do. The bot reads it as a request, goes and does the work, and
-posts **only the answer**. The request itself never appears in the room, because
-it was never meant for the room.
+So we built the other half, and the name was waiting for us: the **inbox**. A
+file dropped there is not something to say, it is something to do. The bot reads
+it as a request, goes and does the work, and posts **only the answer**. The
+request itself never appears in the room, because it was never meant for the
+room.
+
+Outbox: what the bot is handed to send. Inbox: what the bot is asked to deal
+with.
 
 The script becomes:
 
@@ -144,26 +151,26 @@ like one — it announces itself as "a scheduled job on this host". A cron
 pretending to be a human would be the single lie in the one channel the bot
 relies on.
 
-**Telling the two folders apart.** The files look almost identical, and one
-folder has already been used for the other's purpose. So a file that arrives in
-the "do this" folder looking like a "say this" file is set aside with a note
-explaining which folder it belongs in — rather than being carried out as an
-instruction, which is a bad way to discover the mix-up.
+**Telling the two apart.** The files look almost identical, and the outbox has
+already been used once for the inbox's job. So a file that arrives in the inbox
+looking like an outbox file is set aside with a note naming the outbox — rather
+than being carried out as an instruction, which is a bad way to discover the
+mix-up.
 
 **Never doing the same work twice.** If the bot dies halfway through handling a
 file, we cannot know whether the work happened. So the file is set aside rather
 than retried. Repeating a message posts a duplicate. Repeating a *request* runs
 a whole job again, and jobs have consequences.
 
-## Which folder to use
+## Outbox or inbox
 
 Now that both exist, the interesting question is choosing between them, and the
 answer is not "the new one".
 
 If a script already knows the answer — disk space, a service being up, a count
-of something — it should write the finished text to the first folder. That costs
+of something — it should write the finished text to the **outbox**. That costs
 nothing, involves no AI at all, and still reports when the bot is busy or
-broken. The second folder is for when producing the answer needs judgement, or a
+broken. The **inbox** is for when producing the answer needs judgement, or a
 tool a script does not have.
 
 The hourly machine summary is the first kind. The weather report is the second,
@@ -175,7 +182,7 @@ become a request now that everything can be.
 
 ## A bug report from the bots
 
-There is a coda. After the new folder was built, the two bots discussed it in
+There is a coda. After the inbox was built, the two bots discussed it in
 their shared room and concluded it was broken:
 
 > The inbox → prompt flow did hang when bot-b tested it, so there's clearly
@@ -184,12 +191,12 @@ their shared room and concluded it was broken:
 > Inbox is cleaner if the watcher gets fixed.
 
 Confident, specific, and about code written an hour earlier. I checked instead
-of fixing. I dropped a test file into the folder on the machine I could see, and
+of fixing. I dropped a test file into the inbox on the machine I could see, and
 watched it work: picked up, carried out, answered, file consumed.
 
 The likeliest explanation for the other machine is that it had not been
-restarted onto the version containing the new folder — where a file dropped in
-sits untouched, which looks exactly like something hanging.
+restarted onto the version that had an inbox at all — and on a bot without one,
+a file dropped in sits untouched, which looks exactly like something hanging.
 
 Both bots had inferred a broken mechanism from a file that did not move. That
 inference is equally consistent with there being no mechanism at all, and
@@ -215,6 +222,6 @@ A one-way interface looks finished right up until somebody needs the other
 direction — and then it fails without any error at all, because every step in it
 still works perfectly.
 
-The folder was not broken. It was half a design, and the missing half was
+The outbox was not broken. It was half a design, and the missing half was
 invisible for exactly as long as nobody asked the bot to *do* something on a
 schedule.
