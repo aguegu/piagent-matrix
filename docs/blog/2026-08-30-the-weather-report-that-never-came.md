@@ -42,8 +42,10 @@ in it, and something else does the sending. Any program on the computer can drop
 a file in, and the bot picks it up and says what it contains.
 
 It exists because only one program may hold the keys to the encrypted chat.
-Everything else hands its message over and lets the bot do the talking. The bot
-even wrote a comment in the script explaining that, which is to say it
+Everything else hands its message over and lets the bot do the talking — a rule
+learned the hard way, four days earlier, in
+[The message his phone refused to read](2026-08-30-the-message-his-phone-refused-to-read.md).
+The bot even wrote a comment in the script explaining it, which is to say it
 understood the constraint perfectly well.
 
 So when the weather report was wanted, the bot did the same thing again. A
