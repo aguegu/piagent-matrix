@@ -12,10 +12,10 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
     "config": "^5.0.1",
     "dotenv-flow": "^4.1.0",
-    "markdown-it": "^15.0.0",
+    "markdown-it": "^15.0.1",
     "matrix-bot-sdk": "^0.8.0",
     "sanitize-html": "^2.17.7"
   },

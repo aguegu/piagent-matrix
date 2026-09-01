@@ -11,6 +11,11 @@
 
 * **A run that failed was posted as a deliberate silence — that is, not posted at all.** pi retries an API failure internally and then resolves the prompt, so `prompt()` never throws and the error path never ran. What reached the end of the run was an empty reply buffer, which is also how the agent declines to speak, so the run was logged `said nothing` at INFO and the room was told nothing. Twice on 2026-09-01 a question got four failed retries and no reply and no reason: once on a provider quota limit (`429`, "Token Plan 用量上限"), once on provider overload (`529`). Silence became a valid reply in 0.2.2, which is exactly what made silence useless as a signal. An errored `message_end` and pi's `auto_retry_start` / `auto_retry_end` are now recorded, and a run that produced nothing because it failed says so, naming the status, the kind and the provider's own sentence — the request id and the rest of the envelope stay out of the room. Text already produced is kept and marked cut short rather than discarded, and a retry that succeeds clears the failure, so a recovered run is still just an answer
 
+### Improvements
+
+* pi 0.84.3 -> 0.84.4, which fixes **resumed sessions corrupting the next appended entry when the JSONL lacks a trailing newline** — this bot resumes a session per room on every restart, so that is its normal path rather than an edge case. It also stops a large tool result crossing the auto-compaction threshold from being sent to the provider before compaction. No breaking changes, and the surfaces this bot depends on were checked against the new build: `compact()`, `auto_retry_start` / `auto_retry_end`, `message_end`, `continueRecent`, `inMemory`, `reload`, `setThinkingLevel`, `isStreaming`. `stopReason`, which the failed-run notice reads, is declared in no `.d.ts` in either version — an undeclared runtime field the tests now cover
+* markdown-it 15.0.0 -> 15.0.1. `npm audit` is unchanged at 8 advisories, all still the `request` chain under `matrix-bot-sdk` that SECURITY.md accounts for
+
 ## 0.2.3 (2026-09-01)
 
 The spool learns to point the other way. A script could always ask the bot to
