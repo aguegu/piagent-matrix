@@ -17,6 +17,10 @@
 * pi 0.84.3 -> 0.84.4, which fixes **resumed sessions corrupting the next appended entry when the JSONL lacks a trailing newline** — this bot resumes a session per room on every restart, so that is its normal path rather than an edge case. It also stops a large tool result crossing the auto-compaction threshold from being sent to the provider before compaction. No breaking changes, and the surfaces this bot depends on were checked against the new build: `compact()`, `auto_retry_start` / `auto_retry_end`, `message_end`, `continueRecent`, `inMemory`, `reload`, `setThinkingLevel`, `isStreaming`. `stopReason`, which the failed-run notice reads, is declared in no `.d.ts` in either version — an undeclared runtime field the tests now cover
 * markdown-it 15.0.0 -> 15.0.1. `npm audit` is unchanged at 8 advisories, all still the `request` chain under `matrix-bot-sdk` that SECURITY.md accounts for
 
+### Tests
+
+* 153 tests, up from 133: a failed run reported rather than posted as silence, with the attempt count, partial text kept and marked cut short, a recovered retry left as a plain answer, and a raw error passed through when it is not the provider's JSON; compaction reporting what it saved, waiting for a run in flight, and finding a session on disk that the map has forgotten; and the spool refusing to let one slow file block the next while still claiming in name order, capping what runs at once, and keeping a serial spool finishing in order
+
 ## 0.2.3 (2026-09-01)
 
 The spool learns to point the other way. A script could always ask the bot to
