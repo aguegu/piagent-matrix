@@ -1,5 +1,11 @@
 # Releases
 
+## 0.2.4 (in progress)
+
+### Fixes
+
+* **A run that failed was posted as a deliberate silence — that is, not posted at all.** pi retries an API failure internally and then resolves the prompt, so `prompt()` never throws and the error path never ran. What reached the end of the run was an empty reply buffer, which is also how the agent declines to speak, so the run was logged `said nothing` at INFO and the room was told nothing. Twice on 2026-09-01 a question got four failed retries and no reply and no reason: once on a provider quota limit (`429`, "Token Plan 用量上限"), once on provider overload (`529`). Silence became a valid reply in 0.2.2, which is exactly what made silence useless as a signal. An errored `message_end` and pi's `auto_retry_start` / `auto_retry_end` are now recorded, and a run that produced nothing because it failed says so, naming the status, the kind and the provider's own sentence — the request id and the rest of the envelope stay out of the room. Text already produced is kept and marked cut short rather than discarded, and a retry that succeeds clears the failure, so a recovered run is still just an answer
+
 ## 0.2.3 (2026-09-01)
 
 The spool learns to point the other way. A script could always ask the bot to

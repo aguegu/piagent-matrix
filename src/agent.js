@@ -339,7 +339,7 @@ export class AgentManager {
     // Assigning would keep just the last one and silently drop the prose in
     // between. Recording blocks in event order also lets tool lines sit where
     // they actually happened rather than being bunched at the top.
-    const buffer = { blocks: [] };
+    const buffer = { blocks: [], failure: null };
 
     const unsub = session.subscribe((event) => this.#onEvent(event, buffer));
 
@@ -376,6 +376,29 @@ export class AgentManager {
     }
 
     const body = renderReply(buffer);
+
+    // Checked before the silence path, not after: a failed run produces the
+    // same empty buffer as a chosen silence, and reporting one as the other is
+    // how a quota limit came to look like the bot ignoring the room.
+    if (buffer.failure) {
+      const detail = describeApiError(buffer.failure.message);
+      const attempts = buffer.failure.attempts > 1 ? ` after ${buffer.failure.attempts} attempts` : "";
+      LogService.error("agent", `run in ${roomId} failed${attempts}: ${detail}`);
+      const silent = isSilence(body);
+      const note = `⚠️ ${silent ? "No reply" : "Cut short"} — the model provider failed${attempts}: ${detail}`;
+      if (silent) {
+        await this.#post(client, roomId, note);
+      } else {
+        await this.#post(
+          client,
+          roomId,
+          `${body}\n\n_${note}_`,
+          renderReplyHtml(buffer) + `<p><em>${escapeHtml(note)}</em></p>`,
+        );
+      }
+      return;
+    }
+
     if (isSilence(body)) {
       // A normal outcome, not a failure: AGENTS.md tells the agent that silence
       // is a reply, which is what keeps it out of a conversation between other
@@ -427,6 +450,37 @@ export class AgentManager {
           const block = openTextBlock(buffer);
           block.text = extractText(event.message);
           block.done = true;
+          // pi records an API failure on the message and then resolves the
+          // prompt, so the caller's catch never sees it. Without this the
+          // buffer is merely empty — which is also how the agent declines to
+          // speak, so a run that never reached the model would be posted as a
+          // deliberate silence.
+          if (event.message.stopReason === "error") {
+            const attempts = (buffer.failure?.attempts ?? 0) + 1;
+            buffer.failure = { message: event.message.errorMessage, attempts };
+          } else {
+            // A later attempt succeeded, so the earlier failure is history.
+            buffer.failure = null;
+          }
+        }
+        break;
+      }
+      case "auto_retry_start": {
+        // Only for the count and the reason: pi retries internally, and if one
+        // of those attempts succeeds the message_end above clears this again.
+        buffer.failure = {
+          message: event.errorMessage,
+          attempts: event.attempt ?? (buffer.failure?.attempts ?? 0) + 1,
+        };
+        break;
+      }
+      case "auto_retry_end": {
+        if (event.success) buffer.failure = null;
+        else if (event.finalError) {
+          buffer.failure = {
+            message: event.finalError,
+            attempts: event.attempt ?? buffer.failure?.attempts ?? 1,
+          };
         }
         break;
       }
@@ -658,6 +712,35 @@ async function roomDisplayName(client, roomId) {
   } catch {
     return "";
   }
+}
+
+/**
+ * The provider's error, short enough to put in a room.
+ *
+ * pi hands over the transport's raw string: a status code, then whatever JSON
+ * the provider sent, then a request id. The status and the provider's own
+ * sentence are the useful parts — a reader wants "quota exhausted", not an
+ * envelope. Anything that does not parse is passed through, truncated, on the
+ * grounds that an ugly message beats no message.
+ */
+function describeApiError(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return "no reason given";
+  const status = text.match(/^(\d{3})\b/)?.[1] ?? "";
+  const at = text.indexOf("{");
+  if (at >= 0) {
+    try {
+      const parsed = JSON.parse(text.slice(at));
+      const err = parsed?.error ?? parsed;
+      if (typeof err?.message === "string" && err.message) {
+        const label = [status, err.type].filter(Boolean).join(" ");
+        return label ? `${label}: ${err.message}` : err.message;
+      }
+    } catch {
+      // Not JSON after all; the raw text below is the best we have.
+    }
+  }
+  return text.length > 300 ? `${text.slice(0, 300)}…` : text;
 }
 
 /**

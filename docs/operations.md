@@ -63,15 +63,6 @@ Two things the script deliberately does:
 
 ## Known gaps
 
-- **A failed run is indistinguishable from a deliberate silence.** pi retries an
-  API failure internally and then resolves, so `prompt()` does not throw and the
-  error path never runs. The reply buffer is empty, which is also how the agent
-  says nothing on purpose — so the run is logged `said nothing` at INFO and the
-  room is told nothing at all. Observed twice on 2026-09-01, on a provider quota
-  limit (`429`) and on provider overload (`529`): a question was asked, four
-  retries failed, and the sender saw no reply and no reason. pi exposes
-  `auto_retry_start` and `auto_retry_end { success, finalError }`, which is the
-  signal needed to tell the two apart.
 - Events predating startup are not filtered. Harmless while `sync.json` persists
   the sync token, but clearing `data/` makes the bot replay old history — which
   now means *executing* it, not echoing it.
