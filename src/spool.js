@@ -13,10 +13,18 @@
 //     send is a duplicate message, a repeated prompt is a duplicate agent run;
 //   - failures park as `.failed` and stay for inspection instead of retrying
 //     forever;
-//   - names are processed in order, so a timestamp prefix means what it looks
+//   - names are claimed in order, so a timestamp prefix means what it looks
 //     like;
 //   - fs.watch is the fast path and misses events on some filesystems, so a
 //     poll backstops it.
+//
+// `concurrency` is how many handlers may be in flight. It defaults to 1, which
+// also finishes them in name order — what the outbox wants, since two messages
+// posted out of order is a visible fault. Above 1 the claiming stays ordered
+// and only the waiting overlaps, which is what the inbox wants: its handler
+// awaits a whole agent run, and at 1 a long run in one room stalled every other
+// room's prompts behind it. The agent serializes per room by itself, so a
+// second lock here bought nothing and cost that.
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, watch } from "node:fs";
 import { basename, join } from "node:path";
@@ -33,9 +41,18 @@ const FAILED_SUFFIX = ".failed";
  *   Resolves with a line for the log; throws to park the file.
  * @param {string} [opts.claimSuffix]  kept configurable so the outbox can go on
  *   using `.sending`, which anything watching a deployment may know by name.
+ * @param {number} [opts.concurrency]  handlers in flight at once; 1 also means
+ *   they finish in name order.
  * @returns {() => void} stop
  */
-export function watchSpool({ dir, label, handle, claimSuffix = CLAIM_SUFFIX, pollMs = 10_000 }) {
+export function watchSpool({
+  dir,
+  label,
+  handle,
+  claimSuffix = CLAIM_SUFFIX,
+  pollMs = 10_000,
+  concurrency = 1,
+}) {
   if (!dir) {
     LogService.info(label, `No ${label} dir configured — ${label} disabled.`);
     return () => {};
@@ -62,6 +79,26 @@ export function watchSpool({ dir, label, handle, claimSuffix = CLAIM_SUFFIX, pol
 
   let scanning = false;
   let stopped = false;
+  /** Handlers still running, so a full spool stops claiming. @type {Set<Promise<void>>} */
+  const inflight = new Set();
+
+  /** Run one already-claimed file: drop it on success, park it on failure. */
+  async function handleClaimed(name, src, claimed) {
+    try {
+      const note = await handle(name, readFileSync(claimed, "utf8"));
+      unlinkSync(claimed);
+      LogService.info(label, note ?? `Handled ${name}`);
+    } catch (err) {
+      const failed = `${src}${FAILED_SUFFIX}`;
+      try {
+        renameSync(claimed, failed);
+      } catch { /* ignore */ }
+      LogService.error(
+        label,
+        `Failed ${name}: ${err?.message ?? err} (kept as ${basename(failed)})`,
+      );
+    }
+  }
 
   async function scan() {
     if (scanning || stopped) return;
@@ -73,6 +110,11 @@ export function watchSpool({ dir, label, handle, claimSuffix = CLAIM_SUFFIX, pol
 
       for (const name of names) {
         if (stopped) break;
+        // Every slot busy. Whichever handler finishes first scans again, so
+        // the rest are picked up then — including anything that lands in the
+        // meantime, which this pass's listing cannot see.
+        if (inflight.size >= concurrency) break;
+
         const src = join(dir, name);
         const claimed = `${src}${claimSuffix}`;
 
@@ -83,20 +125,14 @@ export function watchSpool({ dir, label, handle, claimSuffix = CLAIM_SUFFIX, pol
           continue;
         }
 
-        try {
-          const note = await handle(name, readFileSync(claimed, "utf8"));
-          unlinkSync(claimed);
-          LogService.info(label, note ?? `Handled ${name}`);
-        } catch (err) {
-          const failed = `${src}${FAILED_SUFFIX}`;
-          try {
-            renameSync(claimed, failed);
-          } catch { /* ignore */ }
-          LogService.error(
-            label,
-            `Failed ${name}: ${err?.message ?? err} (kept as ${basename(failed)})`,
-          );
-        }
+        const running = handleClaimed(name, src, claimed);
+        inflight.add(running);
+        running.finally(() => {
+          inflight.delete(running);
+          if (!stopped) scan().catch(() => {});
+        });
+        // Serial spools wait here, which is what keeps them in name order.
+        if (concurrency === 1) await running;
       }
     } catch (err) {
       LogService.error(label, `scan failed: ${err?.message ?? err}`);

@@ -48,7 +48,8 @@ addressed to that room rather than a `*.txt` that lands in the default. The
 per-message context block carries only what changes: who is speaking, and the
 room on the first turn of a session.
 
-Files are processed in filename order, so a timestamp prefix preserves ordering.
+Files are sent in filename order, one at a time, so a timestamp prefix preserves
+ordering — two messages arriving in a room out of order is a visible fault.
 Messages spooled while the bot is down go out on the next start. A failed send is
 parked as `.failed` rather than retried forever; a file left `.sending` after a
 crash is parked too, since we cannot tell whether it reached the server and
@@ -90,10 +91,18 @@ every turn, and a cron job dressed as a person would be the one lie in that
 channel.
 
 Both spools share their mechanics (`src/spool.js`): write elsewhere and
-`rename()` in so a partial file is never read, names are processed in order,
+`rename()` in so a partial file is never read, names are claimed in order,
 failures park as `.failed`, and a claim left by a crash is parked rather than
 retried — a repeated post is a duplicate message, a repeated prompt is a
 duplicate agent run.
+
+Where they differ is how many files may be in flight. The outbox sends one at a
+time, which is also what keeps its messages in order. The inbox runs up to eight,
+because its handler waits for a whole agent run: serially, a long run in one room
+held the spool and every other room's prompts sat unclaimed behind it — a
+scheduled tick waiting on somebody else's conversation. Claiming stays ordered,
+so drops for one room still reach that room in order, and the agent's own
+per-room chain is what stops them overlapping.
 
 A `.json` in the inbox carrying `body` instead of `prompt` is parked with a
 message saying which spool it belongs in, rather than running someone's
