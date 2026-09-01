@@ -143,7 +143,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model, thinking level, build, uptime and extensions |
+| `.info` | any room | Shows the model, thinking level, context size, build, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.compact` | any room | Summarises this room's history so the session carries less of it |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |

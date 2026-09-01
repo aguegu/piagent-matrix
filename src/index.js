@@ -11,6 +11,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import config from "config";
 import {
   AutojoinRoomsMixin,
@@ -288,6 +289,7 @@ async function runCommand(command, { agent, client, roomId, sender }) {
       [
         `Model: \`${model.current}\``,
         `Thinking: \`${thinking.current}\``,
+        `Context: ${describeContextLine(agent.describeContext(roomId))}`,
         `Build: \`${BUILD}\``,
         `Started: \`${describeStart()}\``,
         describeExtensionLine(agent.describeExtensions()),
@@ -547,6 +549,21 @@ async function describeRoom(client, roomId) {
  * differed entirely in the tools they had — this is the line that answers that
  * question directly.
  */
+/**
+ * What the room's last reply carried, against the model's window.
+ *
+ * Every turn resends the context, so this is the number that decides what a
+ * room costs — and nothing reported it until a room reached 430,000 tokens a
+ * turn and started meeting the plan's token ceiling. The share is of the
+ * window, which is also roughly where pi's own auto-compaction waits.
+ */
+function describeContextLine({ tokens, window }) {
+  if (!tokens) return "not measured yet — after the next reply";
+  const n = tokens.toLocaleString("en-US");
+  if (!window) return `${n} tokens`;
+  return `${n} tokens (${Math.round((tokens / window) * 100)}% of ${window.toLocaleString("en-US")})`;
+}
+
 function describeExtensionLine({ names, failed, live }) {
   const kind = live ? "Extensions" : "Extensions (configured, not loaded yet)";
   const list = names.length ? names.map((n) => `\`${n}\``).join(", ") : "none";
@@ -822,7 +839,13 @@ process.on("unhandledRejection", (reason) => {
   if (err.stack) LogService.debug("bot", err.stack);
 });
 
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+// Only when run, never when imported. Importing this module used to start a
+// whole bot — a second one, against a live crypto store, which is the fault
+// data/bot.lock exists to prevent. A test or a REPL reaching for one exported
+// helper should not log in as the bot.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}

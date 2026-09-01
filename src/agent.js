@@ -18,6 +18,7 @@ import { dirname, resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 import {
+  calculateContextTokens,
   createAgentSession,
   ModelRuntime,
   SessionManager,
@@ -59,6 +60,14 @@ export class AgentManager {
     this.pending = new Map();
     /** Rooms already told where they are. @type {Set<string>} */
     this.briefed = new Set();
+    /**
+     * Tokens the last reply in each room carried, by pi's own reckoning.
+     *
+     * Nothing surfaced this, so a room could reach 430,000 tokens a turn
+     * unnoticed — every turn resending the lot, against a plan measured in
+     * tokens. @type {Map<string, number>}
+     */
+    this.contextTokens = new Map();
     /** @type {import('@earendil-works/pi-coding-agent').ModelRuntime | null} */
     this.runtime = null;
     /** @type {import('@earendil-works/pi-coding-agent').Model<any> | null} */
@@ -156,6 +165,19 @@ export class AgentManager {
   #thinkingLevel() {
     const want = String(this.#readState().thinkingLevel || this.opts.thinkingLevel || "low").toLowerCase();
     return THINKING_LEVELS.includes(want) ? want : "low";
+  }
+
+  /**
+   * What the last reply in a room carried, against the model's window.
+   *
+   * `tokens` is null until a reply lands: the count comes from the provider's
+   * own usage, and a restart starts again knowing nothing.
+   */
+  describeContext(roomId) {
+    return {
+      tokens: this.contextTokens.get(roomId) ?? null,
+      window: this.model?.contextWindow ?? 0,
+    };
   }
 
   /** The thinking level in use for a room, and the levels on offer. */
@@ -350,6 +372,9 @@ export class AgentManager {
       const result = await session.compact();
       const before = result?.tokensBefore;
       const after = result?.estimatedTokensAfter;
+      // So `.info` straight after `.compact` shows what the room now carries
+      // rather than what it carried before.
+      if (typeof after === "number") this.contextTokens.set(roomId, after);
       LogService.info("agent", `compacted ${roomId}: ${before ?? "?"} -> ${after ?? "?"} tokens`);
       return { compacted: true, before, after };
     });
@@ -426,6 +451,8 @@ export class AgentManager {
     } finally {
       unsub();
     }
+
+    if (buffer.contextTokens) this.contextTokens.set(roomId, buffer.contextTokens);
 
     const body = renderReply(buffer);
 
@@ -507,6 +534,10 @@ export class AgentManager {
           // buffer is merely empty — which is also how the agent declines to
           // speak, so a run that never reached the model would be posted as a
           // deliberate silence.
+          // Zero usage is what an errored turn reports; recording it would
+          // wipe a real measurement with a number that means "no reply".
+          const tokens = event.message.usage ? calculateContextTokens(event.message.usage) : 0;
+          if (tokens > 0) buffer.contextTokens = tokens;
           if (event.message.stopReason === "error") {
             const attempts = (buffer.failure?.attempts ?? 0) + 1;
             buffer.failure = { message: event.message.errorMessage, attempts };
