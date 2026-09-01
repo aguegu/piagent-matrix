@@ -24,7 +24,7 @@ describe("command parsing", () => {
 
   it("ignores anything not on the allowlist", () => {
     // Deliberately not a passthrough: unknown commands are ordinary prompts.
-    for (const text of ["/login anthropic", "/compact", "/export", ".foo"]) {
+    for (const text of ["/login anthropic", "/new", "/export", ".foo"]) {
       assert.equal(parseCommand(text), null, `${text} must not be treated as a command`);
     }
   });
@@ -62,11 +62,16 @@ describe("which room may run a command", () => {
     }
   });
 
-  it("gives a working room .info and nothing else", () => {
-    // Every other command either reconfigures the bot for all rooms or reports
-    // on it; both belong in the control channel.
-    assert.equal(mayCommand("info", WORK, MAIN), true);
-    for (const name of Object.keys(COMMANDS).filter((n) => n !== "info")) {
+  it("gives a working room only what is scoped to that room", () => {
+    // `.info` reads this room's settings and `.compact` acts on this room's
+    // session; neither reaches another room or reveals the main room. Every
+    // other command reconfigures the bot for all rooms or reports on it, and
+    // both belong in the control channel.
+    const local = ["info", "compact"];
+    for (const name of local) {
+      assert.equal(mayCommand(name, WORK, MAIN), true, `${name} is scoped to its own room`);
+    }
+    for (const name of Object.keys(COMMANDS).filter((n) => !local.includes(n))) {
       assert.equal(mayCommand(name, WORK, MAIN), false, `${name} must not work in a working room`);
     }
   });

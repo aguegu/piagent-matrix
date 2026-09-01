@@ -7,6 +7,7 @@ belong to the main room** — see below.
 | --- | --- | --- |
 | `.info` | any room | Shows the model, thinking level, build, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
+| `.compact` | any room | Summarises this room's history so the session carries less of it |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
 | `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
@@ -18,13 +19,19 @@ still accepted for clients that pass it through, but `.` is the reliable form.
 
 ## The main room holds the controls
 
-Every command but `.info` either reconfigures the bot for *all* rooms
-(`.model`, `.thinking`, `.reload`) or reports on it (`.rooms`, `.help`). One
-agent config backs every room, so a switch made in a working room would
-reconfigure the others without their knowing, and only the room that did it
-would see the confirmation. That belongs in the bot's control channel.
+Most commands either reconfigure the bot for *all* rooms (`.model`,
+`.thinking`, `.reload`) or report on it (`.rooms`, `.help`). One agent config
+backs every room, so a switch made in a working room would reconfigure the
+others without their knowing, and only the room that did it would see the
+confirmation. That belongs in the bot's control channel.
 
-A working room may hold people who are not the bot's admin, so it gets `.info`
+The exceptions are scoped to the room they are typed in: `.info` reads, and
+`.compact` acts on that room's own session. Neither reaches another room nor
+reveals the main room, so the gate has nothing to protect — and the main room
+would be the wrong home for `.compact` regardless, since it is for management
+while the conversations long enough to need compacting happen elsewhere.
+
+A working room may hold people who are not the bot's admin, so it gets those two
 and nothing else. Anything else there is answered with a flat
 `` `.model` is not available here. `` — no reason, and **never the main room's
 id**. Nothing outside the main room hints that one exists: `.help` does not run
@@ -111,10 +118,17 @@ exports `PI_MODEL` and `PI_PROVIDER` into the shell, so honouring them let a
 stray export decide the bot's model — invisible influence, and pointless once
 the choice is a command away.
 
-Anything unrecognised is an ordinary prompt. `/login` and `/compact`
-are deliberately **not** wired up: they need a back-and-forth a room cannot give,
-or hand a chat message more reach than it should have. pi's TUI also treats `!`
-as "run bash", which is not offered here for the same reason.
+Anything unrecognised is an ordinary prompt. `/login` and `/new` are
+deliberately **not** wired up: they need a back-and-forth a room cannot give, or
+hand a chat message more reach than it should have. pi's TUI also treats `!` as
+"run bash", which is not offered here for the same reason.
+
+Note what "unrecognised" costs. pi's built-in slash commands are dispatched by
+its interactive and RPC modes, not by `AgentSession.prompt()` — which only
+executes extension commands and expands skill commands and prompt templates. So
+a built-in sent as a prompt is not refused; it reaches the model as ordinary
+text and quietly does nothing. That is why `.compact` calls pi's `compact()`
+directly, and why typing `/compact` in a room never compacted anything.
 
 ---
 

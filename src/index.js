@@ -25,7 +25,7 @@ import {
 import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
 import { renderMarkdown } from "./markdown.js";
-import { AgentManager } from "./agent.js";
+import { AgentManager, describeApiError } from "./agent.js";
 import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
@@ -404,6 +404,30 @@ async function runCommand(command, { agent, client, roomId, sender }) {
     return;
   }
 
+  if (command.name === "compact") {
+    // Scoped to this room: a session is per room, and the rooms that grow long
+    // are the ones being talked in, not the main room.
+    let result;
+    try {
+      result = await agent.compact(roomId);
+    } catch (err) {
+      await client.sendMessage(roomId, htmlMessage(
+        `Could not compact: ${describeApiError(err?.message ?? err)}`,
+      ));
+      return;
+    }
+    const count = (n) => (typeof n === "number" ? n.toLocaleString("en-US") : null);
+    const before = count(result.before);
+    const after = count(result.after);
+    const note = !result.compacted
+      ? "No session in this room yet — there is no history to compact."
+      : before && after
+        ? `Compacted this room's history: ${before} → about ${after} tokens.`
+        : "Compacted this room's history.";
+    await client.sendMessage(roomId, htmlMessage(note));
+    return;
+  }
+
   if (command.name === "reload") {
     const { reloaded, failed } = await agent.reload();
     const note = failed.length
@@ -455,7 +479,7 @@ async function announceMainRoom(client, roomId) {
     "**Adopted this as my main room.**",
     "",
     "It is my control channel: commands run here, and anything I am asked to post later arrives here.",
-    "Other rooms get `.info` and nothing else.",
+    "Other rooms get `.info` and `.compact`, which act only on themselves.",
     "",
     "Say `.help` for what I answer to.",
   ].join("\n");

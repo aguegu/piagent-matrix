@@ -2,6 +2,11 @@
 
 ## 0.2.4 (in progress)
 
+### New Features
+
+* **`.compact`** summarises a room's history so its session carries fewer tokens into each later run, reporting what it saved (`93,764 → about 12,000 tokens`). Allowed in any room and scoped to the one it is typed in, like `.info`: it reaches no other room and reveals nothing about the main room, and the main room is the wrong home for it anyway — that is for management, while the conversations long enough to need compacting happen elsewhere. It calls pi's `compact()`, and shares the room's run queue, since pi refuses a prompt while compaction runs and compaction aborts whatever the agent is doing
+* Worth knowing why it could not simply be typed: pi's built-in slash commands are dispatched by its interactive and RPC modes, **not** by `AgentSession.prompt()`, which only executes extension commands and expands skill commands and prompt templates. A built-in sent as a prompt is not refused — it reaches the model as ordinary text and quietly does nothing. So `/compact` in a room never compacted anything, and the same is true of `/new`, `/resume` and the rest. `/reload` appeared to work only because `.reload` was wired to the API by hand
+
 ### Fixes
 
 * **A run that failed was posted as a deliberate silence — that is, not posted at all.** pi retries an API failure internally and then resolves the prompt, so `prompt()` never throws and the error path never ran. What reached the end of the run was an empty reply buffer, which is also how the agent declines to speak, so the run was logged `said nothing` at INFO and the room was told nothing. Twice on 2026-09-01 a question got four failed retries and no reply and no reason: once on a provider quota limit (`429`, "Token Plan 用量上限"), once on provider overload (`529`). Silence became a valid reply in 0.2.2, which is exactly what made silence useless as a signal. An errored `message_end` and pi's `auto_retry_start` / `auto_retry_end` are now recorded, and a run that produced nothing because it failed says so, naming the status, the kind and the provider's own sentence — the request id and the rest of the envelope stay out of the room. Text already produced is kept and marked cut short rather than discarded, and a retry that succeeds clears the failure, so a recovered run is still just an answer

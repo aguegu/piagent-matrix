@@ -302,23 +302,54 @@ export class AgentManager {
     }
     this.pending.set(roomId, depth + 1);
 
-    // Serialize per room. pi's prompt() does NOT run a second prompt while the
-    // session is streaming: it queues via followUp and returns *immediately*,
-    // so a caller that then renders its buffer renders nothing, while its text
-    // silently lands in the previous run's output. Waiting for our turn means
-    // every prompt owns a complete run.
-    const prev = this.chains.get(roomId) ?? Promise.resolve();
-    const mine = prev.then(
-      () => this.#runPrompt(ctx),
-      () => this.#runPrompt(ctx), // a failed predecessor must not block the queue
-    );
-    this.chains.set(roomId, mine.then(() => {}, () => {}));
+    const mine = this.#onTurn(roomId, () => this.#runPrompt(ctx));
 
     try {
       return await mine;
     } finally {
       this.pending.set(roomId, Math.max(0, (this.pending.get(roomId) ?? 1) - 1));
     }
+  }
+
+  /**
+   * Run `work` when the room's turn comes, and hand back what it returns.
+   *
+   * Serializes per room. pi's prompt() does NOT run a second prompt while the
+   * session is streaming: it queues via followUp and returns *immediately*, so
+   * a caller that then renders its buffer renders nothing, while its text
+   * silently lands in the previous run's output. Waiting for our turn means
+   * every prompt owns a complete run.
+   *
+   * Compaction shares the queue rather than having one of its own: pi refuses a
+   * prompt while compaction is running, and compaction aborts whatever the
+   * agent is doing, so the two must never overlap.
+   */
+  #onTurn(roomId, work) {
+    const prev = this.chains.get(roomId) ?? Promise.resolve();
+    const mine = prev.then(work, work); // a failed predecessor must not block the queue
+    this.chains.set(roomId, mine.then(() => {}, () => {}));
+    return mine;
+  }
+
+  /**
+   * Compact one room's session: pi summarises the history and keeps the tail,
+   * so the conversation carries fewer tokens into each subsequent run.
+   *
+   * Scoped to a room because a session is. Nothing to do in a room the bot has
+   * not been spoken to in — an unopened session has no history to shed, and
+   * creating one just to compact it would be worse than saying so.
+   */
+  async compact(roomId) {
+    if (!this.sessions.has(roomId)) return { compacted: false };
+    return this.#onTurn(roomId, async () => {
+      const session = await this.sessions.get(roomId);
+      LogService.info("agent", `compacting ${roomId}`);
+      const result = await session.compact();
+      const before = result?.tokensBefore;
+      const after = result?.estimatedTokensAfter;
+      LogService.info("agent", `compacted ${roomId}: ${before ?? "?"} -> ${after ?? "?"} tokens`);
+      return { compacted: true, before, after };
+    });
   }
 
   /** Run exactly one prompt to completion. Callers must hold the room's turn. */
@@ -723,7 +754,7 @@ async function roomDisplayName(client, roomId) {
  * envelope. Anything that does not parse is passed through, truncated, on the
  * grounds that an ugly message beats no message.
  */
-function describeApiError(raw) {
+export function describeApiError(raw) {
   const text = String(raw ?? "").trim();
   if (!text) return "no reason given";
   const status = text.match(/^(\d{3})\b/)?.[1] ?? "";

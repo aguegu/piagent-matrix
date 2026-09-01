@@ -145,6 +145,7 @@ belong to the main room** — see below.
 | --- | --- | --- |
 | `.info` | any room | Shows the model, thinking level, build, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
+| `.compact` | any room | Summarises this room's history so the session carries less of it |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
 | `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
@@ -154,8 +155,9 @@ belong to the main room** — see below.
 so `/help` opens Element's help and never reaches the bot. A leading `/` is
 still accepted for clients that pass it through, but `.` is the reliable form.
 
-Each is explained in **[docs/commands.md](docs/commands.md)**, including why all
-but `.info` are answered only in the main room.
+Each is explained in **[docs/commands.md](docs/commands.md)**, including why
+everything except `.info` and `.compact` — the two scoped to the room they are
+typed in — is answered only in the main room.
 
 ## Scripts
 

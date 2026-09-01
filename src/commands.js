@@ -11,12 +11,18 @@
 // help rather than reaching the bot at all; `/` is honoured only for clients
 // that pass it through.
 //
-// Commands belong to the main room. Every one of them either reconfigures the
-// bot for all rooms (`.model`, `.thinking`, `.reload`) or reports on it
-// (`.rooms`, `.help`), so the bot's control channel is where they go. A working
-// room may hold people who are not the bot's admin. It gets `.info` and nothing
-// else — and the refusals say nothing about why, or about a main room, so the
-// control channel's existence stays where it belongs.
+// Most commands belong to the main room. They either reconfigure the bot for
+// all rooms (`.model`, `.thinking`, `.reload`) or report on it (`.rooms`,
+// `.help`), so the bot's control channel is where they go. A working room may
+// hold people who are not the bot's admin — and the refusals say nothing about
+// why, or about a main room, so the control channel's existence stays where it
+// belongs.
+//
+// The exceptions are the commands scoped to the room they are typed in: `.info`
+// reads, `.compact` acts. Neither reaches another room nor reveals the main
+// room, so the gate has nothing to protect. For `.compact` the main room would
+// be the wrong home anyway: it is for management, and the conversations that
+// grow long enough to need compacting happen in the other rooms.
 
 /**
  * Commands the bot answers to, and what each is for.
@@ -26,6 +32,7 @@
 export const COMMANDS = {
   info: { what: "Show the model, thinking level and build in use", everywhere: true },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
+  compact: { what: "Summarise this room's history so the session carries less of it", everywhere: true },
   rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>` leaves one" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },
   thinking: { what: "Show the thinking level, or set it: `.thinking <level>`" },
