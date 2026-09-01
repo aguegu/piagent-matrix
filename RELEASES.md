@@ -1,18 +1,27 @@
 # Releases
 
-## 0.2.3 (in progress)
+## 0.2.3 (2026-09-01)
 
-### Documentation
-
-* The roadmap is gone. Its ticked items had fallen well behind what shipped, and its unticked ones were wishes rather than plans — the two that describe real shortcomings were already in Known gaps, and the third (a systemd unit) has joined them. A list that flatters the past and guesses at the future is worse than no list
-* The README is a front page again: what it is, how it works, getting started, troubleshooting, the command table, and a map of the rest. It had grown to 894 lines, so the reference material moved into `docs/` — configuration, model providers, commands, spools, the main room, multi-bot rooms, extending, and running it. Three paragraphs that repeated Getting started went with it
+The spool learns to point the other way. A script could always ask the bot to
+*say* something; now it can give the bot something to *do*. The documentation
+was rebuilt around the pair, and the README went back to being a front page.
 
 ### New Features
 
 * **An inbox** (`src/inbox.js`): a spool whose files are run as prompts, so a cron job or a script can give the agent work. Only the reply is posted; the prompt is not. Reaching for the outbox instead fails quietly and did — a scheduled cue was posted to the room as the bot, and a bot ignores its own messages, so the instruction was seen by everyone except the agent it was addressed to. Takes `{"prompt", "room"?, "from"?}` or a plain `.txt`; a file carrying `body` is parked with a note saying it belongs in the outbox
 * The spool mechanics both directions share — claiming by rename, filename order, parking a crash's claim rather than repeating work, `fs.watch` backed by a poll — moved to `src/spool.js`. The outbox behaves exactly as before, which its tests establish
-
+* `AGENTS.md` says which spool to reach for, chosen by who has to think: a script that can produce the finished text writes it to the outbox, which costs nothing and still reports when the agent is busy or broken; the inbox is for when producing it needs judgement or a tool a script does not have. The agent is who will write the next scheduled job, and without the rule everything becomes a prompt now that everything can be
 * `.info` lists the extensions the bot is running — the ones that initialised once a session exists, and otherwise what `settings.json` asks for, saying which of the two it is showing. Failures are named. Extensions are where the agent's tools come from, and nothing reported them: asked to compare "the skill list", two bots both found zero skills and concluded they were identical, while one had `pi-web-access` and the other had none
+
+### Documentation
+
+* The roadmap is gone. Its ticked items had fallen well behind what shipped, and its unticked ones were wishes rather than plans — the two that describe real shortcomings were already in Known gaps, and the third (a systemd unit) has joined them. A list that flatters the past and guesses at the future is worse than no list
+* The README is a front page again: what it is, how it works, getting started, troubleshooting, the command table, and a map of the rest. It had grown to 894 lines, so the reference material moved into `docs/` — configuration, model providers, commands, spools, the main room, multi-bot rooms, extending, and running it. Three paragraphs that repeated Getting started went with it
+* `docs/blog/` is seven numbered chapters in the order the events happened, rewritten for a reader who does not work on this. The dates had collided — four posts shared one day and sorted alphabetically, which put the outbox's origin story after the story it sets up
+
+### Tests
+
+* 133 tests, up from 120: every inbox drop shape and the refusals beside it — a body that belongs in the outbox, an empty prompt, a drop with no room and no main room, an orphaned claim, and filename order — and naming an extension from its install path, reporting what actually loaded once a session exists, and falling back to `settings.json` while saying that is what it is showing
 
 ## 0.2.2 (2026-08-29)
 
