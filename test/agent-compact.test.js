@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AgentManager } from "../src/agent.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -112,6 +115,46 @@ describe("compacting one room's session", () => {
     ]);
 
     assert.deepEqual(order, ["prompt:start", "prompt:end", "compact"]);
+  });
+
+  it("compacts a room whose session is on disk but not in memory", async () => {
+    // What a restart looks like: the map is empty, the transcript is not. The
+    // first cut checked only the map and told the longest-running room in the
+    // deployment that it had no history to compact.
+    const sessionDir = mkdtempSync(join(tmpdir(), "sessions-"));
+    const roomDir = join(sessionDir, ROOM.replace(/[!@:/\\]/g, "_"));
+    mkdirSync(roomDir, { recursive: true });
+    writeFileSync(join(roomDir, "2026-09-01T00-00-00_abc.jsonl"), "{}\n");
+
+    const session = makeFakeSession();
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      sessionDir,
+      createSession: async () => ({ session }),
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+    assert.equal(mgr.sessions.size, 0, "cold, as after a restart");
+
+    const result = await mgr.compact(ROOM);
+
+    assert.equal(result.compacted, true, "recorded history is history");
+    assert.equal(session.compactCalls, 1);
+  });
+
+  it("still says there is nothing to compact when the room has no transcript", async () => {
+    const sessionDir = mkdtempSync(join(tmpdir(), "sessions-"));
+    const session = makeFakeSession();
+    const mgr = new AgentManager({
+      cwd: process.cwd(),
+      sessionDir,
+      createSession: async () => ({ session }),
+    });
+    mgr.model = { provider: "fake", id: "fake-model" };
+
+    const result = await mgr.compact("!never:example.org");
+
+    assert.deepEqual(result, { compacted: false });
+    assert.equal(session.compactCalls, 0);
   });
 
   it("still reports success when pi gives no token counts", async () => {

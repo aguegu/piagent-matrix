@@ -13,7 +13,7 @@
 //     ends. Tool-call status lines are still surfaced inline so a long tool
 //     run is visible in the final answer.
 
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
@@ -335,14 +335,17 @@ export class AgentManager {
    * Compact one room's session: pi summarises the history and keeps the tail,
    * so the conversation carries fewer tokens into each subsequent run.
    *
-   * Scoped to a room because a session is. Nothing to do in a room the bot has
-   * not been spoken to in — an unopened session has no history to shed, and
-   * creating one just to compact it would be worse than saying so.
+   * Scoped to a room because a session is. A room with nothing recorded has
+   * nothing to shed, and opening a session there just to compact it would be
+   * worse than saying so — but a restart empties the map while the history
+   * stays on disk, so a live session is not what makes a room compactable.
    */
   async compact(roomId) {
-    if (!this.sessions.has(roomId)) return { compacted: false };
+    if (!this.sessions.has(roomId) && !this.#hasHistory(roomId)) return { compacted: false };
     return this.#onTurn(roomId, async () => {
-      const session = await this.sessions.get(roomId);
+      // Resumes the recorded session when the map is cold, which after a
+      // restart is exactly the room long enough to want compacting.
+      const session = await this.#getOrCreateSession(roomId);
       LogService.info("agent", `compacting ${roomId}`);
       const result = await session.compact();
       const before = result?.tokensBefore;
@@ -350,6 +353,24 @@ export class AgentManager {
       LogService.info("agent", `compacted ${roomId}: ${before ?? "?"} -> ${after ?? "?"} tokens`);
       return { compacted: true, before, after };
     });
+  }
+
+  /**
+   * Whether a room has a session recorded on disk.
+   *
+   * `sessions` holds what is live in this process, which a restart empties
+   * while the transcripts stay where they were. Reading the directory is how
+   * the two are told apart.
+   */
+  #hasHistory(roomId) {
+    if (!this.opts.sessionDir) return false;
+    try {
+      const dir = resolve(this.opts.sessionDir, encodeRoomId(roomId));
+      return readdirSync(dir).some((f) => f.endsWith(".jsonl"));
+    } catch {
+      // No directory, or unreadable: nothing to resume either way.
+      return false;
+    }
   }
 
   /** Run exactly one prompt to completion. Callers must hold the room's turn. */
