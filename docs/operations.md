@@ -43,6 +43,7 @@ Two things the script deliberately does:
 | --- | --- | --- |
 | `token.json` | ~140 B | `accessToken`, `deviceId`, `userId`. Mode 0600 |
 | `sync.json` | ~160 B | `syncToken` and filter state |
+| `bot.lock` | ~7 B | pid of the running instance; see below |
 | `crypto/matrix-sdk-crypto.sqlite3` | ~140 KB | Olm account, device keys, Megolm sessions |
 | `crypto/…-wal`, `…-shm` | up to a few MB | SQLite write-ahead log and shared memory |
 | `crypto/bot-sdk.json` | ~270 B | Device id and per-room encryption config (room ids hashed) |
@@ -54,7 +55,13 @@ Two things the script deliberately does:
   bot loses its identity: it logs in fresh, gets a new device, and needs
   `npm run cross-sign` again.
 - **Never run two instances against the same `data/`.** Concurrent access to one
-  crypto store causes corruption and decryption failures.
+  crypto store causes corruption and decryption failures. Since 0.2.4 this is
+  enforced rather than asked for: startup takes `data/bot.lock` and refuses to
+  run if a live process named in it looks like another copy of the bot, naming
+  the pid that holds it. A lock left by a `kill -9` is taken over with a warning,
+  and a pid that has been reused by something else is treated as stale — a false
+  refusal would be worse than the thing it guards against. It is advisory and
+  single-machine: it catches a second `npm start`, not a second container.
 - **Only `token.json` is mode 0600.** The crypto store holds this device's
   private keys but is created world-readable. On a shared machine:
   `chmod -R go-rwx data/`.

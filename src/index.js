@@ -33,6 +33,7 @@ import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
 import { installAgentResources } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
+import { claimInstanceLock } from "./instance-lock.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -155,6 +156,8 @@ let agentPromise = null;
 let botClient = null;
 let stopOutbox = null;
 let stopInbox = null;
+/** Released on shutdown so the next start does not have to break a stale lock. */
+let releaseLock = null;
 /** @type {MainRoom | null} */
 let mainRoom = null;
 /** roomId -> whoever invited the bot, for invites seen this run. */
@@ -187,6 +190,11 @@ async function shutdown(signal) {
   }
   try {
     botClient?.stop?.();
+  } catch {
+    /* ignore */
+  }
+  try {
+    releaseLock?.();
   } catch {
     /* ignore */
   }
@@ -664,6 +672,11 @@ async function main() {
   LogService.muteModule("Metrics");
 
   mkdirSync(resolve(storagePaths.dataDir), { recursive: true });
+  // Before anything opens the crypto store or a spool: a second instance on one
+  // data directory corrupts the Megolm ratchet and steals the first's in-flight
+  // spool claims. Throwing here fails the start with a message that says which
+  // pid holds it, rather than half-running.
+  releaseLock = claimInstanceLock(storagePaths.dataDir);
   mainRoom = new MainRoom(resolve(storagePaths.dataDir));
   // The agent's working directory must exist before pi opens a session in it.
   mkdirSync(config.get("agent.cwd"), { recursive: true });
