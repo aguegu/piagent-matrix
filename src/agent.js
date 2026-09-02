@@ -836,7 +836,11 @@ export function describeApiError(raw) {
  * which went to the room because it is not empty.
  */
 function isSilence(body) {
-  return /^[.。·…]?$/.test(body.trim());
+  // Punctuation and nothing else. The instruction asks for one `.`, and models
+  // variously send `..`, `. .` or an ellipsis; a body with no letters in it
+  // carries nothing either way. It does not rescue a reply that explains the
+  // silence in words — that one is a message, and only AGENTS.md can prevent it.
+  return /^[.。·…\s]*$/.test(body.trim());
 }
 
 /**

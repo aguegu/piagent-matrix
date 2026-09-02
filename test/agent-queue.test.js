@@ -340,6 +340,25 @@ describe("saying nothing", () => {
     assert.deepEqual(await run(""), []);
   });
 
+  it("posts nothing for dots that are not a single dot", async () => {
+    // Observed in a room: one bot sent ".\n\n." and the other ". .", and both
+    // landed as visible messages because only a lone dot counted. The other bot
+    // then answered them, which is how two agents spend four turns each being
+    // silent at the other.
+    assert.deepEqual(await run(".."), []);
+    assert.deepEqual(await run(". ."), []);
+    assert.deepEqual(await run(".\n\n."), []);
+    assert.deepEqual(await run("…"), []);
+  });
+
+  it("still speaks when the silence is explained rather than kept", async () => {
+    // No regex saves this one — it is a message about being quiet, and the room
+    // reads it as conversation. AGENTS.md is what has to prevent it; the test
+    // records that the code does not pretend to.
+    const sent = await run("bk15pi echoing. Silence..");
+    assert.equal(sent.length, 1, "words are speech, whatever they are about");
+  });
+
   it("still posts a real answer that merely ends in a full stop", async () => {
     const sent = await run("Yes.");
     assert.equal(sent.length, 1);
