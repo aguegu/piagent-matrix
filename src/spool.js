@@ -6,8 +6,9 @@
 //
 //   - a writer must rename() into the directory, never write in place, so the
 //     bot cannot read half a file;
-//   - files are claimed by rename before being handled, so two passes cannot
-//     take the same one;
+//   - files are claimed by hard link before being handled, so two passes cannot
+//     take the same one — and neither can two files arriving under the same
+//     name, which rename() would have allowed;
 //   - a claim left behind means the bot died mid-handle. Whether the work
 //     happened is unknowable, so it is parked rather than retried — a repeated
 //     send is a duplicate message, a repeated prompt is a duplicate agent run;
@@ -26,12 +27,32 @@
 // room's prompts behind it. The agent serializes per room by itself, so a
 // second lock here bought nothing and cost that.
 
-import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, watch } from "node:fs";
+import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 
 const CLAIM_SUFFIX = ".working";
 const FAILED_SUFFIX = ".failed";
+
+/**
+ * Take `src` as `claimed`, or throw if someone already has it.
+ *
+ * link()+unlink() is the atomic form: link refuses an existing destination,
+ * where rename would replace it. Filesystems without hard links fall back to
+ * rename, which is what this always used to do — weaker, but the alternative
+ * is a spool that does not work there at all.
+ */
+function claim(src, claimed) {
+  try {
+    linkSync(src, claimed);
+  } catch (err) {
+    if (err?.code === "EEXIST") throw err;
+    // EPERM/ENOSYS/EXDEV: no hard links here.
+    renameSync(src, claimed);
+    return;
+  }
+  unlinkSync(src);
+}
 
 /**
  * @param {object} opts
@@ -118,9 +139,18 @@ export function watchSpool({
         const src = join(dir, name);
         const claimed = `${src}${claimSuffix}`;
 
-        // Claim by rename. If this throws, another pass already took it.
+        // Claim by hard link, not rename. rename() onto an existing path
+        // succeeds silently, so a second drop arriving under the same name
+        // would overwrite a claim already being handled: the running job's
+        // content swapped underneath it, and a second handler started on the
+        // same path — one prompt, two agent runs. link() fails with EEXIST
+        // instead, and the new drop simply waits for the claim to clear.
+        //
+        // Writers do collide: a script naming drops by the second produces one
+        // filename when it runs twice in a second, and three digest jobs
+        // became one file that way.
         try {
-          renameSync(src, claimed);
+          claim(src, claimed);
         } catch {
           continue;
         }

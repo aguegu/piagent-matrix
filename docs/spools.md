@@ -91,7 +91,9 @@ every turn, and a cron job dressed as a person would be the one lie in that
 channel.
 
 Both spools share their mechanics (`src/spool.js`): write elsewhere and
-`rename()` in so a partial file is never read, names are claimed in order,
+`rename()` in so a partial file is never read, files are claimed by hard link
+so a second drop under the same name cannot overwrite one being handled, names
+are claimed in order,
 failures park as `.failed`, and a claim left by a crash is parked rather than
 retried — a repeated post is a duplicate message, a repeated prompt is a
 duplicate agent run.

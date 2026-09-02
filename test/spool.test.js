@@ -152,6 +152,44 @@ describe("spool concurrency", () => {
     assert.deepEqual(finished, ["1-first.json", "2-second.json"]);
   });
 
+  it("does not let a colliding drop overwrite a claim being handled", async () => {
+    // Two writers producing one filename is not hypothetical: a script naming
+    // drops by the second makes one name when it runs twice in a second, and
+    // three digest jobs became one file that way. rename() onto the existing
+    // claim would swap the running job's content and start a second handler on
+    // the same path — one prompt, two agent runs, and one ENOENT when the
+    // loser tried to delete what the winner had already removed.
+    const handled = [];
+    const held = gate();
+    stop = watchSpool({
+      dir,
+      label: "test",
+      pollMs: 20,
+      concurrency: 4,
+      async handle(name, contents) {
+        handled.push(contents);
+        if (contents === "FIRST") await held.p;
+        return name;
+      },
+    });
+
+    drop("same.json", "FIRST");
+    await settle();
+    assert.deepEqual(handled, ["FIRST"], "the first is in flight");
+
+    drop("same.json", "SECOND"); // same name, while the first is still running
+    await settle();
+
+    assert.deepEqual(handled, ["FIRST"], "the second must wait, not clobber");
+    assert.ok(existsSync(join(dir, "same.json")), "and must still be on disk");
+
+    held.open();
+    await settle(150);
+
+    assert.deepEqual(handled, ["FIRST", "SECOND"], "then it runs, with its own content");
+    assert.ok(!existsSync(join(dir, "same.json.failed")), "and nothing is parked");
+  });
+
   it("still parks a failure without taking the spool down", async () => {
     const done = [];
     stop = watchSpool({
