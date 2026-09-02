@@ -22,7 +22,7 @@
 
 ### Tests
 
-* 153 tests, up from 133: a failed run reported rather than posted as silence, with the attempt count, partial text kept and marked cut short, a recovered retry left as a plain answer, and a raw error passed through when it is not the provider's JSON; compaction reporting what it saved, waiting for a run in flight, and finding a session on disk that the map has forgotten; and the spool refusing to let one slow file block the next while still claiming in name order, capping what runs at once, and keeping a serial spool finishing in order
+* 165 tests, up from 133: a failed run reported rather than posted as silence, with the attempt count, partial text kept and marked cut short, a recovered retry left as a plain answer, and a raw error passed through when it is not the provider's JSON; compaction reporting what it saved, waiting for a run in flight, and finding a session on disk that the map has forgotten; and the spool refusing to let one slow file block the next while still claiming in name order, capping what runs at once, keeping a serial spool finishing in order, and refusing to let a colliding drop overwrite a claim in flight; the instance lock recording its holder, refusing a live one, taking over a stale one, and not deleting a lock somebody else has taken; and a room's context size recorded from real usage, ignored when a failed turn reports zeroes, and updated by compaction
 
 ## 0.2.3 (2026-09-01)
 
