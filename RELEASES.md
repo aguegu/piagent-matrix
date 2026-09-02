@@ -1,5 +1,7 @@
 # Releases
 
+## 0.2.5 (in progress)
+
 ## 0.2.4 (2026-09-02)
 
 Failures stop being silent. A run that died on a provider error, a room quietly
