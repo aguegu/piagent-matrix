@@ -1,6 +1,13 @@
 # Releases
 
-## 0.2.4 (in progress)
+## 0.2.4 (2026-09-02)
+
+Failures stop being silent. A run that died on a provider error, a room quietly
+carrying 430,000 tokens a turn, a scheduled job stalled behind someone else's
+conversation, a second instance on one data directory, a drop overwritten by
+one that shared its name — each of these already happened, and none of them
+said so. Most of the release is giving them a voice, and `.compact` a way to act
+on the loudest of them.
 
 ### New Features
 
@@ -23,7 +30,7 @@
 
 ### Tests
 
-* 167 tests, up from 133: a failed run reported rather than posted as silence, with the attempt count, partial text kept and marked cut short, a recovered retry left as a plain answer, and a raw error passed through when it is not the provider's JSON; compaction reporting what it saved, waiting for a run in flight, and finding a session on disk that the map has forgotten; and the spool refusing to let one slow file block the next while still claiming in name order, capping what runs at once, keeping a serial spool finishing in order, and refusing to let a colliding drop overwrite a claim in flight; the instance lock recording its holder, refusing a live one, taking over a stale one, and not deleting a lock somebody else has taken; and a room's context size recorded from real usage, ignored when a failed turn reports zeroes, and updated by compaction
+* 167 tests, up from 133. Each fix's tests were run against the behaviour they replaced and watched to fail there — 5 of 8 for the failed-run notice, 3 of 6 for the spool's concurrency, one apiece for the cold-map compaction, the colliding claim and the dots. Tests for the new features have no prior behaviour to fail against, and are not claimed to: a failed run reported rather than posted as silence, with the attempt count, partial text kept and marked cut short, a recovered retry left as a plain answer, and a raw error passed through when it is not the provider's JSON; compaction reporting what it saved, waiting for a run in flight, and finding a session on disk that the map has forgotten; and the spool refusing to let one slow file block the next while still claiming in name order, capping what runs at once, keeping a serial spool finishing in order, and refusing to let a colliding drop overwrite a claim in flight; the instance lock recording its holder, refusing a live one, taking over a stale one, and not deleting a lock somebody else has taken; and a room's context size recorded from real usage, ignored when a failed turn reports zeroes, and updated by compaction
 
 ## 0.2.3 (2026-09-01)
 
