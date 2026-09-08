@@ -381,6 +381,23 @@ export class AgentManager {
   }
 
   /**
+   * What this room's session has cost, as pi accounts for it.
+   *
+   * Cumulative and billed: pi's totals include history that compaction has
+   * since summarised away, which is the honest number for "what has this room
+   * cost" even though the context is smaller than it was.
+   *
+   * Null when the room has no session and no transcript. A cold map is not an
+   * empty room, so a recorded session is resumed first — the same trap
+   * `.compact` fell into on the day it shipped.
+   */
+  async describeSession(roomId) {
+    if (!this.sessions.has(roomId) && !this.#hasHistory(roomId)) return null;
+    const session = await this.#getOrCreateSession(roomId);
+    return session.getSessionStats?.() ?? null;
+  }
+
+  /**
    * Whether a room has a session recorded on disk.
    *
    * `sessions` holds what is live in this process, which a restart empties

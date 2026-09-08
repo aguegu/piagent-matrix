@@ -19,10 +19,11 @@
 // belongs.
 //
 // The exceptions are the commands scoped to the room they are typed in: `.info`
-// reads, `.compact` acts. Neither reaches another room nor reveals the main
-// room, so the gate has nothing to protect. For `.compact` the main room would
-// be the wrong home anyway: it is for management, and the conversations that
-// grow long enough to need compacting happen in the other rooms.
+// and `.session` read, `.compact` acts. None of them reaches another room or
+// reveals the main room, so the gate has nothing to protect. For `.compact` and
+// `.session` the main room would be the wrong home anyway: it is for
+// management, and the conversations that grow long enough to be worth compacting
+// — or costing — happen in the other rooms.
 
 /**
  * Commands the bot answers to, and what each is for.
@@ -33,6 +34,7 @@ export const COMMANDS = {
   info: { what: "Show the model, thinking level and build in use", everywhere: true },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
   compact: { what: "Summarise this room's history so the session carries less of it", everywhere: true },
+  session: { what: "What this room's session has cost so far: messages, tokens, money", everywhere: true },
   rooms: { what: "List the rooms the bot is in; `.rooms leave <roomId>` leaves one" },
   model: { what: "Show the model, or switch it: `.model <provider/id>`" },
   thinking: { what: "Show the thinking level, or set it: `.thinking <level>`" },

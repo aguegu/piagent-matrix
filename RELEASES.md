@@ -2,6 +2,10 @@
 
 ## 0.2.5 (in progress)
 
+### New Features
+
+* **`.session`** reports what a room has cost: messages in and out, tool calls, tokens sent and received with the share served from cache, the money, and what it is carrying now. The numbers are pi's own `getSessionStats()`, which counts cumulatively and includes history that compaction has since summarised away — so it answers "what has this room cost", where `.info` answers "what is it carrying this turn". Scoped to the room it is typed in and allowed anywhere, like `.info`; a room whose session is only on disk is resumed first, the trap `.compact` shipped with. The session file's path is left out — the id finds it, and a working room may hold people with no business in the filesystem. `/session` is another of pi's built-ins, so typing it in a room did nothing at all
+
 ## 0.2.4 (2026-09-02)
 
 Failures stop being silent. A run that died on a provider error, a room quietly

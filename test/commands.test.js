@@ -63,11 +63,11 @@ describe("which room may run a command", () => {
   });
 
   it("gives a working room only what is scoped to that room", () => {
-    // `.info` reads this room's settings and `.compact` acts on this room's
-    // session; neither reaches another room or reveals the main room. Every
+    // `.info` and `.session` read this room's own state and `.compact` acts on
+    // it; none of them reaches another room or reveals the main room. Every
     // other command reconfigures the bot for all rooms or reports on it, and
-    // both belong in the control channel.
-    const local = ["info", "compact"];
+    // those belong in the control channel.
+    const local = ["info", "compact", "session"];
     for (const name of local) {
       assert.equal(mayCommand(name, WORK, MAIN), true, `${name} is scoped to its own room`);
     }

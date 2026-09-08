@@ -8,6 +8,7 @@ belong to the main room** — see below.
 | `.info` | any room | Shows the model, thinking level, context size, build, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.compact` | any room | Summarises this room's history so the session carries less of it |
+| `.session` | any room | What this room's session has cost: messages, tokens, money |
 | `.rooms` | main room | Lists the rooms the bot is in; `.rooms leave <roomId>` leaves one |
 | `.model` | main room | Shows the model and what else is available; `.model <provider/id>` switches it |
 | `.thinking` | main room | Shows the thinking level; `.thinking <level>` sets it |
@@ -25,8 +26,8 @@ backs every room, so a switch made in a working room would reconfigure the
 others without their knowing, and only the room that did it would see the
 confirmation. That belongs in the bot's control channel.
 
-The exceptions are scoped to the room they are typed in: `.info` reads, and
-`.compact` acts on that room's own session. Neither reaches another room nor
+The exceptions are scoped to the room they are typed in: `.info` and `.session`
+read, and `.compact` acts on that room's own session. Neither reaches another room nor
 reveals the main room, so the gate has nothing to protect — and the main room
 would be the wrong home for `.compact` regardless, since it is for management
 while the conversations long enough to need compacting happen elsewhere.
@@ -128,7 +129,8 @@ its interactive and RPC modes, not by `AgentSession.prompt()` — which only
 executes extension commands and expands skill commands and prompt templates. So
 a built-in sent as a prompt is not refused; it reaches the model as ordinary
 text and quietly does nothing. That is why `.compact` calls pi's `compact()`
-directly, and why typing `/compact` in a room never compacted anything.
+directly and `.session` calls `getSessionStats()`, and why typing `/compact` or
+`/session` in a room never did anything at all.
 
 ---
 

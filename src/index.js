@@ -414,6 +414,22 @@ async function runCommand(command, { agent, client, roomId, sender }) {
     return;
   }
 
+  if (command.name === "session") {
+    // Scoped to this room, like .info: a session is per room, and what it has
+    // cost is the room's own business rather than the control channel's.
+    let stats;
+    try {
+      stats = await agent.describeSession(roomId);
+    } catch (err) {
+      await client.sendMessage(roomId, htmlMessage(
+        `Could not read the session: ${describeApiError(err?.message ?? err)}`,
+      ));
+      return;
+    }
+    await client.sendMessage(roomId, htmlMessage(describeSessionReport(stats)));
+    return;
+  }
+
   if (command.name === "compact") {
     // Scoped to this room: a session is per room, and the rooms that grow long
     // are the ones being talked in, not the main room.
@@ -557,6 +573,38 @@ async function describeRoom(client, roomId) {
  * turn and started meeting the plan's token ceiling. The share is of the
  * window, which is also roughly where pi's own auto-compaction waits.
  */
+/**
+ * What a room's session has cost, sized for a chat message.
+ *
+ * pi's totals are cumulative and billed — they include history that compaction
+ * has since summarised away — so this answers "what has this room cost", which
+ * is a different question from what `.info` reports as the context carried now.
+ *
+ * The session file's path is deliberately left out. The id is enough to find it,
+ * and a working room may hold people who have no business with the filesystem.
+ */
+function describeSessionReport(stats) {
+  if (!stats) return "No session in this room yet — nothing has been spent here.";
+  const n = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : "?");
+  const t = stats.tokens ?? {};
+  const prompt = (t.input ?? 0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0);
+  const lines = [
+    `**Session** \`${stats.sessionId ?? "unknown"}\``,
+    `Messages: ${n(stats.totalMessages)} — ${n(stats.userMessages)} in, ${n(stats.assistantMessages)} out, ` +
+      `${n(stats.toolCalls)} tool call(s)`,
+    `Tokens: ${n(prompt)} sent, ${n(t.output)} received`,
+  ];
+  // The cache share is the number that explains the bill: everything sent is
+  // re-sent every turn, and only the cached part of it is cheap.
+  if (prompt > 0 && (t.cacheRead ?? 0) > 0) {
+    lines.push(`  ${n(t.cacheRead)} of that served from cache (${Math.round((t.cacheRead / prompt) * 100)}%)`);
+  }
+  if (typeof stats.cost === "number" && stats.cost > 0) lines.push(`Cost: $${stats.cost.toFixed(3)}`);
+  const now = stats.contextUsage?.tokens;
+  if (typeof now === "number") lines.push(`Carrying now: ${n(now)} tokens`);
+  return lines.join("\n");
+}
+
 function describeContextLine({ tokens, window }) {
   if (!tokens) return "not measured yet — after the next reply";
   const n = tokens.toLocaleString("en-US");
