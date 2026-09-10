@@ -61,6 +61,13 @@ RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
 # to trust the bot's own source tree. node-config resolves its directory from
 # the working directory, so it has to be told where the app's is.
 ENV NODE_CONFIG_DIR=/app/config
+
+# The pinned pi on PATH, so `pi` works from the workspace and always means the
+# version this image was built against. Without it, `npx pi` from a directory
+# with no node_modules goes to the registry and offers to install an unrelated
+# public package called `pi` — a stranger's code, one keystroke away.
+ENV PATH=/app/node_modules/.bin:$PATH
+
 WORKDIR /workspace
 
 # uid 1000, which matches the host account this is developed on, so a bind

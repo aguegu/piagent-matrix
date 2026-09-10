@@ -159,6 +159,26 @@ Two things to test before committing to it:
   `ENV`, minimal `PATH`. The `%` incident is a reminder of how quietly a
   crontab can be wrong.
 
+## Logging a provider in
+
+The container starts in `/workspace`, so an interactive pi trusts the agent's
+own ground rather than the bot's source tree:
+
+```sh
+docker compose run --rm bot pi     # then /login <provider>
+```
+
+**`pi`, not `npx pi`.** `/workspace` has no `node_modules`, so npx falls
+through to the registry and offers to install an unrelated public package
+called `pi` — a stranger's code behind a `(y)` prompt. The image puts the
+pinned binary on `PATH` instead, so `pi` always means the version this image
+was built against.
+
+The login lands in `PI_AGENT_DIR` (`/data/pi`), which is part of the data
+volume, so the sandbox holds its own credentials rather than borrowing the
+host bot's. A provider key in the environment works too, and writes nothing to
+disk.
+
 ## Known limits
 
 - **The instance lock does not cross machines.** `data/bot.lock` holds a pid and
