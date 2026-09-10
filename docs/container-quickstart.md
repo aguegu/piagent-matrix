@@ -135,6 +135,36 @@ out, never opening the bot's crypto store.
 Ends in `SUCCESS — device is cross-signed.`, after which Element stops
 flagging the session.
 
+## Changing what the agent is told
+
+Its standing instructions are assembled at every start and written to
+`data/pi/AGENTS.md`. That file is the bot's to rewrite — read it to see
+exactly what the agent was told, but edit it and the bot stops managing it.
+
+The parts that differ by deployment live beside it:
+
+```
+data/parts-available/    every section that could be enabled, ours republished
+                         each start, plus any you write
+data/parts-enabled/      the ones in use, as copies, in name order
+  10-living-in-container.md
+  20-scheduling-crontab.md
+```
+
+Turning one off is `rm`; reordering is renaming a prefix; changing the wording
+is editing the copy in `parts-enabled/`, with `parts-available/` keeping ours
+to compare against. All of it takes effect on the next restart, and the
+startup log says where they are and how many are in each:
+
+```
+Sections: 2 enabled in /data/parts-enabled, 2 available in /data/parts-available.
+```
+
+Two things a container makes worth stating: the shipped source in the image is
+`agent/AGENTS.template.md`, full of placeholders and **not** what pi reads, and
+a section you add needs no rebuild — a markdown file and a copy is the whole
+of it. See [extending](extending.md#sections-that-depend-on-the-deployment).
+
 ## Running pi's own commands
 
 The image carries pi's CLI, so extensions and credentials are managed through
@@ -191,6 +221,7 @@ had nothing.
 | `Allowing … MATRIX_ALLOWED_USERS is empty` on every message | Exactly what it says — step 2 |
 | An installed extension does not appear in `.info` | `.reload` does not pick up a package installed after the process started. Restart the container |
 | `EROFS: read-only file system` from a `pi` command | Those commands lock `settings.json`; the data volume must be writable |
+| An edit to `data/pi/AGENTS.md` keeps disappearing | It is rewritten at every start. Edit the copy in `data/parts-enabled/` instead, or remove the managed marker to claim the file |
 | Two bots answering as the same account | Two containers on one `data/` volume. The instance lock stores a pid and cannot see across a PID namespace, so it will not catch this |
 
 ## What is not here yet

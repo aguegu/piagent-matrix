@@ -114,6 +114,7 @@ Losing any of these is not "losing a cache".
 | `data/inbox`, `data/outbox` | `INBOX_DIR`, `OUTBOX_DIR` | Work in flight and text waiting to be posted. Inside `data/` deliberately — they are no longer a host interface, and a parked `.failed` is the audit trail that diagnosed the digest bug, so it belongs where the rest of the state is kept |
 | the agent's workspace | `BOT_CWD` | Whatever the agent has been building |
 | the crontab file | — | The agent's own schedule. A plain file, deliberately: see below. It lives in `data/` too |
+| `data/parts-available`, `data/parts-enabled` | — | What the agent is told, beyond the standing instructions. Enabled copies are yours to edit; see [extending](extending.md#sections-that-depend-on-the-deployment) |
 
 `PI_AGENT_DIR` would default inside `DATA_DIR` on its own, but the image sets
 it explicitly. Left implicit it arrives at `/data/pi` through a `||` in
