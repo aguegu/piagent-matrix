@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
-import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { watchSpool } from "../src/spool.js";
@@ -41,6 +41,7 @@ describe("spool concurrency", () => {
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 4,
       async handle(name) {
         started.push(name);
@@ -69,6 +70,7 @@ describe("spool concurrency", () => {
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 4,
       async handle(name) { started.push(name); await held.p; return name; },
     });
@@ -86,7 +88,8 @@ describe("spool concurrency", () => {
     stop = watchSpool({
       dir,
       label: "test",
-      pollMs: 5_000, // long: the rescan must come from the finishing handler
+      pollMs: 5_000,
+      settleMs: 0, // long: the rescan must come from the finishing handler
       concurrency: 1,
       async handle(name) { started.push(name); if (name === "1-slow.json") await held.p; return name; },
     });
@@ -111,6 +114,7 @@ describe("spool concurrency", () => {
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 2,
       async handle() {
         now += 1;
@@ -137,6 +141,7 @@ describe("spool concurrency", () => {
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 1,
       async handle(name) {
         await settle(name === "1-first.json" ? 40 : 1); // the first is the slow one
@@ -165,6 +170,7 @@ describe("spool concurrency", () => {
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 4,
       async handle(name, contents) {
         handled.push(contents);
@@ -190,12 +196,60 @@ describe("spool concurrency", () => {
     assert.ok(!existsSync(join(dir, "same.json.failed")), "and nothing is parked");
   });
 
+  it("leaves a file alone until it has stopped changing", async () => {
+    // What an agent did for two days: build the file on its final path instead
+    // of renaming it in. The spool claimed one mid-write, read truncated JSON,
+    // and parked a digest that was perfectly good a moment later.
+    const handled = [];
+    stop = watchSpool({
+      dir,
+      label: "test",
+      pollMs: 5_000, // the retry must come from the settle timer, not the poll
+      settleMs: 120,
+      async handle(name, contents) { handled.push(contents); return name; },
+    });
+
+    // Written in place, in pieces, the way `write` or a shell redirect does it.
+    const path = join(dir, "inplace.json");
+    writeFileSync(path, '{"body": "half');
+    await settle(60);
+    assert.deepEqual(handled, [], "a file still being written is not claimed");
+
+    appendFileSync(path, ' and the rest"}');
+    await settle(400);
+
+    assert.deepEqual(handled, ['{"body": "half and the rest"}'], "claimed whole, once it settled");
+  });
+
+  it("costs a writer that renames in nothing", async () => {
+    // The mtime comes from when the file was written elsewhere, so a drop that
+    // arrives complete is already older than the window and goes at once.
+    const handled = [];
+    stop = watchSpool({
+      dir,
+      label: "test",
+      pollMs: 5_000,
+      settleMs: 5_000, // long enough that any wait would fail this test
+      async handle(name) { handled.push(name); return name; },
+    });
+
+    const tmp = join(dir, ".staged");
+    writeFileSync(tmp, "complete");
+    const old = new Date(Date.now() - 60_000);
+    utimesSync(tmp, old, old); // written a minute ago, moved in now
+    renameSync(tmp, join(dir, "renamed.txt"));
+    await settle(200);
+
+    assert.deepEqual(handled, ["renamed.txt"], "no wait for a well-behaved writer");
+  });
+
   it("still parks a failure without taking the spool down", async () => {
     const done = [];
     stop = watchSpool({
       dir,
       label: "test",
       pollMs: 20,
+      settleMs: 0,
       concurrency: 4,
       async handle(name) {
         if (name === "1-bad.json") throw new Error("nope");

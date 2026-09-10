@@ -2,6 +2,10 @@
 
 ## 0.2.5 (in progress)
 
+### Fixes
+
+* **A file still being written could be claimed and read half-finished.** Writers are asked to build the file elsewhere and `rename()` it in, which makes a file in the spool complete by definition — but nothing enforces that, and it was broken: the agent spent two days writing digests directly onto their final path in the outbox, and one was claimed mid-write, failed to parse as JSON, and was parked. All three parked files were valid JSON by the time anyone looked, which is the fingerprint — the claim is a hard link, so the writer's remaining bytes went into the very file that had already been read short. A `.txt` would have been worse: a truncated message posted with no error at all. Files are now passed over until they have been untouched for `settleMs` (1s by default, configurable per spool), and a pass that defers something comes back for it rather than waiting for the next poll. It costs a well-behaved writer nothing: an mtime set while the file was staged elsewhere is already past the window when it is moved in
+
 ### New Features
 
 * **`.session`** reports what a room has cost: messages in and out, tool calls, tokens sent and received with the share served from cache, the money, and what it is carrying now. The numbers are pi's own `getSessionStats()`, which counts cumulatively and includes history that compaction has since summarised away — so it answers "what has this room cost", where `.info` answers "what is it carrying this turn". Scoped to the room it is typed in and allowed anywhere, like `.info`; a room whose session is only on disk is resumed first, the trap `.compact` shipped with. The session file's path is left out — the id finds it, and a working room may hold people with no business in the filesystem. `/session` is another of pi's built-ins, so typing it in a room did nothing at all

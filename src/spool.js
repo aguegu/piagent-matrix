@@ -5,7 +5,10 @@
 // the ones worth having in one place:
 //
 //   - a writer must rename() into the directory, never write in place, so the
-//     bot cannot read half a file;
+//     bot cannot read half a file. That is a rule nothing can enforce, and it
+//     has been broken: an agent spent two days building digests directly on
+//     their final path, and one was read mid-write and parked. So a file is
+//     also left alone until it has stopped changing — see `settleMs`;
 //   - files are claimed by hard link before being handled, so two passes cannot
 //     take the same one — and neither can two files arriving under the same
 //     name, which rename() would have allowed;
@@ -27,7 +30,7 @@
 // room's prompts behind it. The agent serializes per room by itself, so a
 // second lock here bought nothing and cost that.
 
-import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, watch } from "node:fs";
+import { linkSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, watch } from "node:fs";
 import { basename, join } from "node:path";
 import { LogService } from "matrix-bot-sdk";
 
@@ -64,6 +67,10 @@ function claim(src, claimed) {
  *   using `.sending`, which anything watching a deployment may know by name.
  * @param {number} [opts.concurrency]  handlers in flight at once; 1 also means
  *   they finish in name order.
+ * @param {number} [opts.settleMs]  leave a file alone until it has been
+ *   untouched this long, so a writer building one in place is not read halfway.
+ *   Costs nothing for a writer that renames in: the mtime comes from when the
+ *   file was written elsewhere, which is already in the past.
  * @returns {() => void} stop
  */
 export function watchSpool({
@@ -73,6 +80,7 @@ export function watchSpool({
   claimSuffix = CLAIM_SUFFIX,
   pollMs = 10_000,
   concurrency = 1,
+  settleMs = 1_000,
 }) {
   if (!dir) {
     LogService.info(label, `No ${label} dir configured — ${label} disabled.`);
@@ -129,6 +137,11 @@ export function watchSpool({
         .filter((n) => (n.endsWith(".txt") || n.endsWith(".json")) && !n.startsWith("."))
         .sort();
 
+      const now = Date.now();
+      // Set when something was passed over for being too fresh, so this pass
+      // knows to come back for it.
+      let deferred = false;
+
       for (const name of names) {
         if (stopped) break;
         // Every slot busy. Whichever handler finishes first scans again, so
@@ -138,6 +151,18 @@ export function watchSpool({
 
         const src = join(dir, name);
         const claimed = `${src}${claimSuffix}`;
+
+        // Still being written? A partial `.json` fails to parse and is parked,
+        // which at least says so; a partial `.txt` would be posted as a
+        // truncated message and say nothing at all.
+        try {
+          if (now - statSync(src).mtimeMs < settleMs) {
+            deferred = true;
+            continue;
+          }
+        } catch {
+          continue; // gone between listing and stat: someone else has it
+        }
 
         // Claim by hard link, not rename. rename() onto an existing path
         // succeeds silently, so a second drop arriving under the same name
@@ -163,6 +188,12 @@ export function watchSpool({
         });
         // Serial spools wait here, which is what keeps them in name order.
         if (concurrency === 1) await running;
+      }
+      // fs.watch may not fire again for a file that has stopped changing, and
+      // the poll is a long way off, so come back for it once it has settled.
+      if (deferred && !stopped) {
+        const again = setTimeout(() => scan().catch(() => {}), settleMs);
+        again.unref?.();
       }
     } catch (err) {
       LogService.error(label, `scan failed: ${err?.message ?? err}`);

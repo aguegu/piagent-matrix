@@ -34,7 +34,7 @@ const DEFAULT_FROM = "a scheduled job on this host";
  * @param {string|(() => string)} opts.defaultRoom  main room for unaddressed drops
  * @param {(job: {roomId: string, prompt: string, from: string}) => Promise<void>} opts.deliver
  */
-export function startInbox({ dir, defaultRoom = "", deliver, pollMs = 10_000, concurrency = 8 } = {}) {
+export function startInbox({ dir, defaultRoom = "", deliver, pollMs = 10_000, concurrency = 8, settleMs } = {}) {
   const readDefaultRoom = () =>
     (typeof defaultRoom === "function" ? defaultRoom() : defaultRoom) || "";
   if (dir) LogService.info("inbox", `Watching ${dir} for prompts.`);
@@ -43,6 +43,7 @@ export function startInbox({ dir, defaultRoom = "", deliver, pollMs = 10_000, co
     dir,
     label: "inbox",
     pollMs,
+    settleMs,
     // Each handler awaits a whole agent run, so a serial spool let one room's
     // long run stall every other room's prompts — a scheduled tick for one room
     // waiting on a conversation in another. Claiming stays in name order, so

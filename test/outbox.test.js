@@ -44,7 +44,7 @@ describe("outbox", () => {
 
   it("sends a .txt drop to the default room", async () => {
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100, settleMs: 0 });
 
     spool(dir, "20260101T000000Z-a.txt", "hello\n");
     await settle(dir);
@@ -57,7 +57,7 @@ describe("outbox", () => {
     // This is the state index.js produces when the bot starts before being
     // invited anywhere: joined[0] is undefined, so defaultRoom is "".
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: "", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "", pollMs: 100, settleMs: 0 });
 
     spool(dir, "20260101T000000Z-a.txt", "hello\n");
     await settle(dir);
@@ -70,7 +70,7 @@ describe("outbox", () => {
   it("still routes a .json drop that names its own room", async () => {
     // The same empty-default state must not block explicitly addressed messages.
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: "", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "", pollMs: 100, settleMs: 0 });
 
     spool(dir, "20260101T000000Z-b.json", JSON.stringify({ room: "!explicit:example.org", body: "hi" }));
     await settle(dir);
@@ -82,7 +82,7 @@ describe("outbox", () => {
     const client = fakeClient();
     spool(dir, "20260101T000000Z-early.txt", "queued while down");
 
-    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100, settleMs: 0 });
     await settle(dir);
 
     assert.deepEqual(client.sent.map((m) => m.body), ["queued while down"]);
@@ -90,7 +90,7 @@ describe("outbox", () => {
 
   it("processes drops in filename order", async () => {
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100, settleMs: 0 });
 
     spool(dir, "20260101T000003Z-c.txt", "third");
     spool(dir, "20260101T000001Z-a.txt", "first");
@@ -107,7 +107,7 @@ describe("outbox", () => {
     writeFileSync(join(dir, "20260101T000000Z-a.txt.sending"), "ambiguous");
 
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: "!room:example.org", pollMs: 100, settleMs: 0 });
     await sleep(300);
 
     assert.equal(client.sent.length, 0, "an ambiguous claim is never re-sent");
@@ -129,7 +129,7 @@ describe("outbox reads the main room per send", () => {
     // is no main room, and the first invite establishes one while it runs.
     let mainRoom = "";
     const client = fakeClient();
-    stop = startOutbox(client, { dir, defaultRoom: () => mainRoom, pollMs: 100 });
+    stop = startOutbox(client, { dir, defaultRoom: () => mainRoom, pollMs: 100, settleMs: 0 });
 
     spool(dir, "20260101T000001Z-early.txt", "before any room");
     await sleep(400);

@@ -27,6 +27,7 @@ describe("inbox", () => {
       dir,
       defaultRoom,
       pollMs: 20,
+      settleMs: 0,
       deliver: async (job) => { ran.push(job); },
     });
   };

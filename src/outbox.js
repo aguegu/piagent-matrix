@@ -30,7 +30,7 @@ import { watchSpool } from "./spool.js";
  *   drops. A function is read per send, so a main room adopted after startup
  *   takes effect without a restart.
  */
-export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } = {}) {
+export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000, settleMs } = {}) {
   const readDefaultRoom = () =>
     (typeof defaultRoom === "function" ? defaultRoom() : defaultRoom) || "";
   if (dir) {
@@ -44,6 +44,7 @@ export function startOutbox(client, { dir, defaultRoom = "", pollMs = 10_000 } =
     dir,
     label: "outbox",
     pollMs,
+    settleMs,
     // Kept from before the spool was shared: a deployment's tooling may know
     // this suffix by name.
     claimSuffix: ".sending",
