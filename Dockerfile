@@ -4,12 +4,24 @@
 # with "Cannot find module '…-linux-x64-gnu'".
 FROM node:24-bookworm-slim
 
-# The agent's tools reach for these. pi's `grep` shells out to ripgrep, which
-# has always been present on the host and so has never looked like a
-# dependency; without it one tool errors while the bot appears healthy.
-# ca-certificates is also what lets the bot reach a homeserver over TLS.
+# What the agent reaches for, chosen from what it has actually run rather than
+# from taste. Counting bash tool calls across this deployment's session
+# history: curl 2162, jq 1223, python3 1044 — the three most-used commands by
+# a wide margin, and all three absent from a slim image. procps is `free`,
+# `ps` and `top`, which it uses to answer questions about the machine.
+#
+# pi's own `grep` tool shells out to ripgrep, which every host has had and so
+# never looked like a dependency; without it one tool errors while the bot
+# appears healthy. ca-certificates is also what lets it reach a homeserver
+# over TLS.
+#
+# Deliberately absent: `at` and `cron`. Both accept work and silently never
+# run it unless their daemon is running, which is the failure mode this
+# project has spent two releases removing. Scheduling is a decision of its
+# own — see docs/containerization.md.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates git ripgrep \
+  && apt-get install -y --no-install-recommends \
+       bash ca-certificates curl git jq procps python3 ripgrep \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -54,18 +54,31 @@ inherits that flag produces an image that starts, joins rooms, and dies on the
 first message. Approve that one package and no others — see
 [configuration](configuration.md).
 
-**The agent's tools need binaries in the image.** The toolset is `bash, read,
-write, edit, grep, find, ls`, and pi's `grep` shells out to **ripgrep** (there
-is an `rgPath` in its tool source). On this host `rg` has always been present,
-so it has never been visible as a dependency. In a slim image its absence shows
-up as one tool erroring rather than the bot failing, which is worse. At minimum:
+**The agent's tools need binaries in the image**, and which ones is a
+question with evidence rather than an opinion. Counting the commands in its
+bash calls across this deployment's session history:
 
 ```
-bash ca-certificates git ripgrep
+curl 2162    jq 1223    python3 1044
 ```
 
-`git` and `ca-certificates` come from pi's own list; `ca-certificates` is also
-what lets the agent reach a homeserver over TLS.
+All three were absent from the first image, and the failure is quiet: the
+agent adapts. Asked to schedule something it tried `at`, then `crontab`, then
+fell back to `nohup bash -c 'sleep 300 && …'` and reported success — three
+missing tools, no error surfaced to anyone.
+
+`procps` (`free`, `ps`, `top`) goes in for the same reason. pi's own `grep`
+tool shells out to **ripgrep**, which every host has had and so never looked
+like a dependency; `ca-certificates` is what lets the bot reach a homeserver
+over TLS.
+
+```
+bash ca-certificates curl git jq procps python3 ripgrep
+```
+
+**`at` and `cron` are deliberately absent.** Both accept work and silently
+never run it unless their daemon is running — the failure mode two releases
+were spent removing. Scheduling is its own decision, below.
 
 ## What has to survive the container
 
