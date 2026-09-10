@@ -1,6 +1,12 @@
 # Releases
 
-## 0.2.5 (in progress)
+## 0.2.5 (2026-09-10)
+
+Two things, both found by watching what the bots were actually doing rather
+than by planning. `.session` answers what a room has cost, which `.info` could
+not — that reports the turn, not the total. And a spool file is now left alone
+until its writer has stopped touching it, after an agent spent two days
+building digests directly on their final path and one was read halfway.
 
 ### Fixes
 
@@ -9,6 +15,10 @@
 ### New Features
 
 * **`.session`** reports what a room has cost: messages in and out, tool calls, tokens sent and received with the share served from cache, the money, and what it is carrying now. The numbers are pi's own `getSessionStats()`, which counts cumulatively and includes history that compaction has since summarised away — so it answers "what has this room cost", where `.info` answers "what is it carrying this turn". Scoped to the room it is typed in and allowed anywhere, like `.info`; a room whose session is only on disk is resumed first, the trap `.compact` shipped with. The session file's path is left out — the id finds it, and a working room may hold people with no business in the filesystem. `/session` is another of pi's built-ins, so typing it in a room did nothing at all
+
+### Tests
+
+* 173 tests, up from 167: what a room's session has cost, read from a live room and from one whose transcript is only on disk, with nothing reported for a room that has neither and a pi build that no longer exposes the stats; and the spool leaving a file alone while it is still being written, checked against the behaviour it replaces, beside a renamed-in drop that must not wait at all
 
 ## 0.2.4 (2026-09-02)
 
