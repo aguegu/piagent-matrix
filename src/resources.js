@@ -45,6 +45,38 @@ export function renderPart(name, vars = {}) {
 }
 
 /**
+ * The enabled parts, in the order given, as one block.
+ *
+ * Available is not enabled: everything in `agent/parts/` can be included, and
+ * a deployment says which are. That list belongs in configuration where it can
+ * be read, rather than in branches here.
+ *
+ * A named part that does not exist, or one whose placeholders resolve to
+ * nothing, is logged rather than thrown — a bot missing a paragraph should
+ * still answer — but logged loudly, because the failure is otherwise an
+ * instruction the agent never sees and nobody misses.
+ */
+export function renderParts(names = [], vars = {}) {
+  const out = [];
+  for (const name of names) {
+    let text;
+    try {
+      text = readFileSync(join(PARTS, `${name}.md`), "utf8");
+    } catch {
+      LogService.error("resources", `AGENTS.md part "${name}" is enabled but not in ${PARTS} — the agent will not be told what it says.`);
+      continue;
+    }
+    for (const [, key] of text.matchAll(/\{\{(\w+)\}\}/g)) {
+      if (!vars[key]) {
+        LogService.warn("resources", `part "${name}" uses {{${key}}}, which is empty — is it enabled on a deployment that does not configure it?`);
+      }
+    }
+    out.push(fillTemplate(text, vars));
+  }
+  return out.join("\n");
+}
+
+/**
  * Marks a file as the bot's to rewrite.
  *
  * AGENTS.md is also where an operator would put their own standing

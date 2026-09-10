@@ -100,6 +100,12 @@ export default {
     // it lives — that most paths do not survive, that /tmp is not shared with
     // the container its jobs run in, and that the host is out of reach.
     // Empty on a host, where none of that is true.
-    sandbox: process.env.AGENT_SANDBOX || "",
+    // Which optional sections of AGENTS.md this deployment enables, in the
+    // order they should appear. Everything in agent/parts/ is available;
+    // available is not enabled. Empty on a host, which needs none of them.
+    parts: (process.env.AGENT_PARTS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 };

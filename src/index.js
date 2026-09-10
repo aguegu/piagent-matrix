@@ -31,7 +31,7 @@ import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
-import { installAgentResources, renderPart } from "./resources.js";
+import { installAgentResources, renderParts } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
@@ -605,29 +605,6 @@ function describeSessionReport(stats) {
   return lines.join("\n");
 }
 
-/** Where the agent lives, when that is somewhere it cannot see out of. */
-function sandboxSection() {
-  if (config.get("agent.sandbox") !== "container") return "";
-  return renderPart("living-in-container", {
-    DATA_DIR: resolve(storagePaths.dataDir),
-    SESSION_DIR: resolve(config.get("agent.sessionDir") || storagePaths.dataDir),
-    BOT_CWD: config.get("agent.cwd"),
-  });
-}
-
-/** The scheduling section, or nothing where a real cron daemon exists. */
-function schedulingSection() {
-  const crontabFile = config.get("agent.crontabFile");
-  if (!crontabFile) return "";
-  return renderPart("scheduling-crontab", {
-    CRONTAB_FILE: crontabFile,
-    CRON_LOG: join(dirname(crontabFile), "cron.log"),
-    CRON_ALIVE: join(dirname(crontabFile), "cron-alive"),
-    INBOX_DIR: resolve(config.get("inbox.dir")),
-    OUTBOX_DIR: resolve(config.get("outbox.dir")),
-  });
-}
-
 function describeContextLine({ tokens, window }) {
   if (!tokens) return "not measured yet — after the next reply";
   const n = tokens.toLocaleString("en-US");
@@ -785,12 +762,24 @@ async function main() {
   // Those differ exactly when someone has swapped credentials without swapping
   // data/token.json, and the agent should not be the last to know.
   const userId = await client.getUserId().catch(() => matrix.userId);
+  const crontabFile = config.get("agent.crontabFile");
   installAgentResources(resolve(config.get("agent.agentDir")), {
     // Deployment-specific sections live in agent/parts/ and are pulled in
     // where they apply. A host with a real cron gets nothing here, because
     // the agent already knows how to drive `crontab`.
-    WHERE_YOU_ARE: sandboxSection(),
-    SCHEDULING: schedulingSection(),
+    // Available is not enabled: agent/parts/ holds every optional section,
+    // and AGENT_PARTS says which this deployment uses, in order. One bag of
+    // values serves them all — a part takes what it needs.
+    PARTS: renderParts(config.get("agent.parts"), {
+      DATA_DIR: resolve(storagePaths.dataDir),
+      SESSION_DIR: resolve(config.get("agent.sessionDir") || storagePaths.dataDir),
+      BOT_CWD: config.get("agent.cwd"),
+      INBOX_DIR: resolve(config.get("inbox.dir")),
+      OUTBOX_DIR: resolve(config.get("outbox.dir")),
+      CRONTAB_FILE: crontabFile,
+      CRON_LOG: crontabFile ? join(dirname(crontabFile), "cron.log") : "",
+      CRON_ALIVE: crontabFile ? join(dirname(crontabFile), "cron-alive") : "",
+    }),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),

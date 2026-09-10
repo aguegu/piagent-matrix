@@ -100,7 +100,7 @@ ENV DATA_DIR=/data \
     OUTBOX_DIR=/data/outbox \
     BOT_CWD=/workspace \
     CRONTAB_FILE=/data/crontab \
-    AGENT_SANDBOX=container
+    AGENT_PARTS=living-in-container,scheduling-crontab
 RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
   && chown -R node:node /data /sessions /workspace
 

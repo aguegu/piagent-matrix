@@ -3,7 +3,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { fillTemplate, installAgentResources, MANAGED, PARTS, renderPart, SHIPPED } from "../src/resources.js";
+import { MANAGED, PARTS, SHIPPED, fillTemplate, installAgentResources, renderPart, renderParts } from "../src/resources.js";
 
 describe("filling a template", () => {
   it("substitutes what it knows", () => {
@@ -106,9 +106,8 @@ describe("installing the bot's standing instructions", () => {
     // them rather than where they read.
     assert.deepEqual(used, [
       "BOT_CWD", "BOT_NAME", "DATA_DIR", "INBOX_DIR", "MATRIX_USER_ID", "OUTBOX_DIR",
-      // Whole sections rather than paths, each empty where it does not apply:
-      // see schedulingSection and sandboxSection in index.js.
-      "SCHEDULING", "WHERE_YOU_ARE",
+      // The enabled optional sections, joined — see AGENT_PARTS.
+      "PARTS",
     ]);
   });
 
@@ -185,8 +184,7 @@ describe("optional sections of AGENTS.md", () => {
       installAgentResources(dir, {
         DATA_DIR: "/data", BOT_CWD: "/workspace", OUTBOX_DIR: "/data/outbox",
         INBOX_DIR: "/data/inbox", MATRIX_USER_ID: "@b:example.org", BOT_NAME: "b",
-        WHERE_YOU_ARE: "## Where you are\n\nInside a container.\n",
-        SCHEDULING: "## Scheduling\n\nA file.\n",
+        PARTS: "## Where you are\n\nInside a container.\n\n## Scheduling\n\nA file.\n",
       });
 
       assert.deepEqual(readdirSync(dir), ["AGENTS.md"], "one context file, nothing beside it");
@@ -197,5 +195,40 @@ describe("optional sections of AGENTS.md", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("available parts, and which are enabled", () => {
+  // nginx's split: everything in agent/parts/ is available, and a deployment
+  // says which it enables. The list belongs in configuration where it can be
+  // read, not in branches in index.js.
+  const vars = {
+    DATA_DIR: "/data", SESSION_DIR: "/sessions", BOT_CWD: "/workspace",
+    INBOX_DIR: "/data/inbox", OUTBOX_DIR: "/data/outbox",
+    CRONTAB_FILE: "/data/crontab", CRON_LOG: "/data/cron.log", CRON_ALIVE: "/data/cron-alive",
+  };
+
+  it("enables nothing by default", () => {
+    assert.equal(renderParts([], vars), "");
+  });
+
+  it("includes only what is named, in the order named", () => {
+    const out = renderParts(["scheduling-crontab", "living-in-container"], vars);
+    assert.ok(out.indexOf("## Scheduling") < out.indexOf("## Where you are"), "order is the list's");
+    const one = renderParts(["living-in-container"], vars);
+    assert.doesNotMatch(one, /## Scheduling/, "an available part stays out until enabled");
+  });
+
+  it("survives a part that is enabled but missing", () => {
+    // A typo in the list must not take the bot down, but must not pass in
+    // silence either — the agent would simply never be told that thing.
+    const out = renderParts(["living-in-container", "no-such-part"], vars);
+    assert.match(out, /## Where you are/, "the rest still renders");
+    assert.doesNotMatch(out, /no-such-part/);
+  });
+
+  it("fills every placeholder the enabled parts use", () => {
+    const out = renderParts(readdirSync(PARTS).map((n) => n.replace(/\.md$/, "")), vars);
+    assert.doesNotMatch(out, /\{\{/, "nothing reaches the agent unresolved");
   });
 });

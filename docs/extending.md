@@ -62,18 +62,30 @@ genuinely differs, the difference is a **part**: a markdown file in
 `agent/parts/`, pulled into a `{{PLACEHOLDER}}` where it applies and left
 empty where it does not.
 
-There is one today. `{{SCHEDULING}}` becomes `parts/scheduling-crontab.md`
-when `CRONTAB_FILE` is set — a container, where there is no cron daemon and
-the schedule is a file — and nothing on a host, where real `cron` exists and
-the agent already knows how to drive it.
+**Available is not enabled**, in nginx's sense. Everything in
+`agent/parts/` can be included; `AGENT_PARTS` says which this deployment
+actually uses, and in what order:
+
+```
+AGENT_PARTS=living-in-container,scheduling-crontab   # the image
+AGENT_PARTS=                                         # a host: none of it applies
+```
+
+They are joined into `{{PARTS}}` in `AGENTS.md`. One bag of values serves them
+all, and a part takes what it needs.
 
 Adding one:
 
 1. write `agent/parts/<name>.md`, with `{{VARS}}` for anything path-like;
-2. in `src/index.js`, decide from config whether it applies, and
-   `renderPart("<name>", { … })` if so;
-3. add its placeholder to the guard in `test/resources.test.js`, which asserts
-   every placeholder the shipped files use is actually supplied.
+2. if it needs a value nothing supplies yet, add it to the bag in
+   `src/index.js` and to the guard in `test/resources.test.js`;
+3. enable it where it applies — the `Dockerfile`, a compose `environment`, or
+   an `.env`.
+
+Nothing in code decides. A part that is enabled but missing is logged as an
+error and skipped, and one whose placeholders resolve to empty strings warns —
+both because the alternative is an instruction the agent never sees and nobody
+notices.
 
 Two rules worth keeping. **Prose belongs in markdown** — that section spent a
 day as 36 lines of strings in a JS array with escaped backticks, which is a
