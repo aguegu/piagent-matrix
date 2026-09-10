@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MANAGED, PARTS, SHIPPED, fillTemplate, installAgentResources, renderPart, renderParts } from "../src/resources.js";
+import { MANAGED, PARTS, SHIPPED, enabledParts, fillTemplate, installAgentResources, publishParts, renderPart, seedEnabled } from "../src/resources.js";
 
 describe("filling a template", () => {
   it("substitutes what it knows", () => {
@@ -199,59 +199,82 @@ describe("optional sections of AGENTS.md", () => {
 });
 
 describe("available parts, and which are enabled", () => {
-  // nginx's split: everything in agent/parts/ is available, and a deployment
-  // says which it enables. The list belongs in configuration where it can be
-  // read, not in branches in index.js.
+  // nginx's split, made a filesystem act: everything available sits in one
+  // directory the operator can read, and a link in parts-enabled turns one
+  // on. Both live on the data volume, because a symlink into the image is no
+  // use to somebody running a published one.
   const vars = {
     DATA_DIR: "/data", SESSION_DIR: "/sessions", BOT_CWD: "/workspace",
     INBOX_DIR: "/data/inbox", OUTBOX_DIR: "/data/outbox",
     CRONTAB_FILE: "/data/crontab", CRON_LOG: "/data/cron.log", CRON_ALIVE: "/data/cron-alive",
   };
+  let data, avail, enabled;
+  beforeEach(() => {
+    data = mkdtempSync(join(tmpdir(), "partsvol-"));
+    avail = join(data, "parts");
+    enabled = join(data, "parts-enabled");
+  });
+  afterEach(() => rmSync(data, { recursive: true, force: true }));
 
-  it("enables nothing by default", () => {
-    assert.equal(renderParts([], vars), "");
+  it("publishes the shipped parts where they can be read", () => {
+    publishParts(avail);
+    const shipped = readdirSync(PARTS).sort();
+    assert.deepEqual(readdirSync(avail).sort(), shipped, "available is visible on the volume");
+    assert.ok(readFileSync(join(avail, shipped[0]), "utf8").startsWith(MANAGED), "and marked as ours");
   });
 
-  it("includes only what is named, in the order named", () => {
-    const out = renderParts(["scheduling-crontab", "living-in-container"], vars);
-    assert.ok(out.indexOf("## Scheduling") < out.indexOf("## Where you are"), "order is the list's");
-    const one = renderParts(["living-in-container"], vars);
-    assert.doesNotMatch(one, /## Scheduling/, "an available part stays out until enabled");
+  it("leaves a published part alone once it is edited", () => {
+    publishParts(avail);
+    const mine = join(avail, "living-in-container.md");
+    writeFileSync(mine, "## Mine now\n");
+    publishParts(avail);
+    assert.equal(readFileSync(mine, "utf8"), "## Mine now\n", "edit one of ours and it stops being ours");
   });
 
-  it("takes an operator's own part, and lets it replace one of ours", () => {
-    // The shipped parts are inside the image; a published image is not
-    // editable. An operator's directory is on the data volume, which is.
-    const mine = mkdtempSync(join(tmpdir(), "parts-"));
-    try {
-      writeFileSync(join(mine, "house-style.md"), "## House style\n\nBe brief in {{BOT_CWD}}.\n");
-      writeFileSync(join(mine, "living-in-container.md"), "## Where you are\n\nSomewhere of our own choosing.\n");
-      const dirs = [mine, PARTS];
-
-      const added = renderParts(["house-style"], vars, dirs);
-      assert.match(added, /Be brief in \/workspace/, "their own part renders, placeholders and all");
-
-      const replaced = renderParts(["living-in-container"], vars, dirs);
-      assert.match(replaced, /Somewhere of our own choosing/, "same name means theirs wins");
-      assert.doesNotMatch(replaced, /not shared with anything/, "and ours is not also included");
-
-      const shippedOnly = renderParts(["scheduling-crontab"], vars, dirs);
-      assert.match(shippedOnly, /## Scheduling/, "ours still resolves when they have not overridden it");
-    } finally {
-      rmSync(mine, { recursive: true, force: true });
-    }
+  it("enables nothing until something is linked", () => {
+    publishParts(avail);
+    assert.equal(enabledParts(enabled, vars), "", "a missing directory is not an error");
+    mkdirSync(enabled);
+    assert.equal(enabledParts(enabled, vars), "", "nor is an empty one");
   });
 
-  it("survives a part that is enabled but missing", () => {
-    // A typo in the list must not take the bot down, but must not pass in
-    // silence either — the agent would simply never be told that thing.
-    const out = renderParts(["living-in-container", "no-such-part"], vars, [PARTS]);
-    assert.match(out, /## Where you are/, "the rest still renders");
-    assert.doesNotMatch(out, /no-such-part/);
+  it("seeds once, with relative links, and never again", () => {
+    publishParts(avail);
+    assert.equal(seedEnabled(enabled, avail, ["living-in-container"]), true);
+    assert.deepEqual(readdirSync(enabled), ["10-living-in-container.md"]);
+    assert.ok(readlinkSync(join(enabled, "10-living-in-container.md")).startsWith(".."),
+      "relative, so it resolves the same from the host and inside the container");
+
+    rmSync(join(enabled, "10-living-in-container.md"));
+    assert.equal(seedEnabled(enabled, avail, ["living-in-container"]), false, "seeding is once");
+    assert.deepEqual(readdirSync(enabled), [], "an empty directory is a choice, not a mistake to fix");
   });
 
-  it("fills every placeholder the enabled parts use", () => {
-    const out = renderParts(readdirSync(PARTS).map((n) => n.replace(/\.md$/, "")), vars);
+  it("renders in the order the links sort, not the order they were made", () => {
+    publishParts(avail);
+    mkdirSync(enabled);
+    symlinkSync("../parts/scheduling-crontab.md", join(enabled, "10-scheduling.md"));
+    symlinkSync("../parts/living-in-container.md", join(enabled, "20-where.md"));
+    const out = enabledParts(enabled, vars);
+    assert.ok(out.indexOf("## Scheduling") < out.indexOf("## Where you are"), "10- before 20-");
     assert.doesNotMatch(out, /\{\{/, "nothing reaches the agent unresolved");
+    assert.doesNotMatch(out, /managed by/, "and the marker is ours, not the agent's to read");
+  });
+
+  it("keeps going past a link that leads nowhere", () => {
+    publishParts(avail);
+    mkdirSync(enabled);
+    symlinkSync("../parts/living-in-container.md", join(enabled, "10-where.md"));
+    symlinkSync("../parts/deleted.md", join(enabled, "20-gone.md"));
+    const out = enabledParts(enabled, vars);
+    assert.match(out, /## Where you are/, "the rest still renders");
+  });
+
+  it("takes an operator's own part, enabled the same way", () => {
+    publishParts(avail);
+    writeFileSync(join(avail, "house-style.md"), "## House style\n\nBe brief in {{BOT_CWD}}.\n");
+    mkdirSync(enabled);
+    symlinkSync("../parts/house-style.md", join(enabled, "10-house.md"));
+    assert.match(enabledParts(enabled, vars), /Be brief in \/workspace/);
   });
 });

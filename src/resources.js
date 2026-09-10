@@ -18,8 +18,8 @@
 // naming a path has to name an absolute one, and that path differs per host.
 // `{{DATA_DIR}}` and friends are substituted as the file is written.
 
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LogService } from "matrix-bot-sdk";
 
@@ -45,45 +45,98 @@ export function renderPart(name, vars = {}) {
 }
 
 /**
- * The enabled parts, in the order given, as one block.
+ * Publish the shipped parts where an operator can see and edit them.
  *
- * Available is not enabled: a directory holds every section that *could* be
- * included, and the enabled list says which are. Two directories, searched in
- * order — an operator's own first, then the ones shipped in the image — so a
- * deployment can add sections of its own, or replace one of ours by writing a
- * file with the same name. That directory is on the data volume, which is the
- * only part of a published image an operator can actually edit.
+ * Available has to be visible. A symlink into the image is no use to someone
+ * running a published one — they cannot read what they are enabling, let
+ * alone copy it — so the shipped sections are written onto the data volume
+ * beside any of their own.
  *
- * A named part that does not exist, or one whose placeholders resolve to
- * nothing, is logged rather than thrown — a bot missing a paragraph should
- * still answer — but logged loudly, because the failure is otherwise an
- * instruction the agent never sees and nobody misses.
+ * Each carries the managed marker, and a file without it is left alone: the
+ * same bargain AGENTS.md makes. Edit one of ours and it stops being ours.
  */
-export function renderParts(names = [], vars = {}, dirs = [PARTS]) {
-  const out = [];
-  for (const name of names) {
-    let text;
-    let from;
-    for (const dir of dirs) {
-      try {
-        text = readFileSync(join(dir, `${name}.md`), "utf8");
-        from = dir;
-        break;
-      } catch { /* try the next */ }
-    }
-    if (text === undefined) {
-      LogService.error("resources", `AGENTS.md part "${name}" is enabled but is in none of ${dirs.join(", ")} — the agent will not be told what it says.`);
+export function publishParts(dir, from = PARTS) {
+  mkdirSync(dir, { recursive: true });
+  for (const name of readdirSync(from).filter((n) => n.endsWith(".md"))) {
+    const target = join(dir, name);
+    const wanted = `${MANAGED}\n\n${readFileSync(join(from, name), "utf8")}`;
+    let current = null;
+    try { current = readFileSync(target, "utf8"); } catch { /* new */ }
+    if (current !== null && !current.startsWith(MANAGED)) {
+      LogService.info("resources", `${target} is yours, not ours — left as it is.`);
       continue;
     }
-    if (from !== PARTS) LogService.info("resources", `Using ${name}.md from ${from}.`);
+    if (current !== wanted) writeFileSync(target, wanted);
+  }
+}
+
+/**
+ * The enabled parts, in directory order, as one block.
+ *
+ * Enabling is a filesystem act, as in nginx: everything available lives in
+ * one directory, and a link in `parts-enabled/` turns one on. Order is the
+ * order the names sort in, which is why the seeded links carry a numeric
+ * prefix — `10-`, `20-` — leaving room to insert between them.
+ *
+ * An entry that resolves to nothing is logged rather than thrown, loudly: a
+ * bot missing a paragraph should still answer, but the failure is otherwise
+ * an instruction the agent never sees and nobody misses.
+ */
+export function enabledParts(enabledDir, vars = {}) {
+  let entries;
+  try {
+    entries = readdirSync(enabledDir).filter((n) => n.endsWith(".md")).sort();
+  } catch {
+    return "";
+  }
+
+  const out = [];
+  for (const entry of entries) {
+    let text;
+    try {
+      text = readFileSync(join(enabledDir, entry), "utf8");
+    } catch (err) {
+      LogService.error(
+        "resources",
+        `${join(enabledDir, entry)} is enabled but leads nowhere (${err?.code ?? err}) — the agent will not be told what it says.`,
+      );
+      continue;
+    }
+    // The marker is ours, not something to read out to the agent.
+    if (text.startsWith(MANAGED)) text = text.slice(MANAGED.length).replace(/^\s*\n/, "");
     for (const [, key] of text.matchAll(/\{\{(\w+)\}\}/g)) {
       if (!vars[key]) {
-        LogService.warn("resources", `part "${name}" uses {{${key}}}, which is empty — is it enabled on a deployment that does not configure it?`);
+        LogService.warn("resources", `${entry} uses {{${key}}}, which is empty — enabled on a deployment that does not configure it?`);
       }
     }
     out.push(fillTemplate(text, vars));
   }
   return out.join("\n");
+}
+
+/**
+ * Turn on the named parts, once, by linking them — and never again.
+ *
+ * A deployment says what a fresh install should start with; after that the
+ * directory is the operator's, and an empty one means they turned everything
+ * off, which is a choice rather than a mistake to correct on every boot.
+ *
+ * The links are relative so they resolve the same read from the host as from
+ * inside the container, which an absolute path into either would not.
+ */
+export function seedEnabled(enabledDir, availableDir, names = []) {
+  if (existsSync(enabledDir)) return false;
+  mkdirSync(enabledDir, { recursive: true });
+  names.forEach((name, i) => {
+    const link = join(enabledDir, `${(i + 1) * 10}-${name}.md`);
+    try {
+      symlinkSync(join(relative(enabledDir, availableDir), `${name}.md`), link);
+    } catch (err) {
+      LogService.warn("resources", `could not enable ${name}: ${err?.message ?? err}`);
+    }
+  });
+  LogService.info("resources", `Enabled ${names.join(", ") || "nothing"} in ${enabledDir}; it is yours from now on.`);
+  return true;
 }
 
 /**

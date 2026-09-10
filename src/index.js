@@ -31,7 +31,7 @@ import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
-import { installAgentResources, PARTS as SHIPPED_PARTS, renderParts } from "./resources.js";
+import { enabledParts, installAgentResources, publishParts, seedEnabled } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
@@ -770,7 +770,9 @@ async function main() {
     // Available is not enabled: agent/parts/ holds every optional section,
     // and AGENT_PARTS says which this deployment uses, in order. One bag of
     // values serves them all — a part takes what it needs.
-    PARTS: renderParts(config.get("agent.parts"), {
+    // Whatever is linked in parts-enabled, in the order it sorts. One bag of
+    // values serves them all — a part takes what it needs.
+    PARTS: enabledParts(enabledDir, {
       DATA_DIR: resolve(storagePaths.dataDir),
       SESSION_DIR: resolve(config.get("agent.sessionDir") || storagePaths.dataDir),
       BOT_CWD: config.get("agent.cwd"),
@@ -779,12 +781,7 @@ async function main() {
       CRONTAB_FILE: crontabFile,
       CRON_LOG: crontabFile ? join(dirname(crontabFile), "cron.log") : "",
       CRON_ALIVE: crontabFile ? join(dirname(crontabFile), "cron-alive") : "",
-    }, [
-      // An operator's own, on the data volume and so editable in a published
-      // image, then the ones shipped. Same name in both means theirs wins.
-      resolve(storagePaths.dataDir, "parts"),
-      SHIPPED_PARTS,
-    ]),
+    }),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),
