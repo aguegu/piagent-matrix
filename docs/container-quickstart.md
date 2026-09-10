@@ -135,6 +135,43 @@ out, never opening the bot's crypto store.
 Ends in `SUCCESS — device is cross-signed.`, after which Element stops
 flagging the session.
 
+## Running pi's own commands
+
+The image carries pi's CLI, so extensions and credentials are managed through
+the container rather than from a checkout:
+
+```sh
+cd ~/containers/mybot
+docker compose exec bot pi list                        # what is installed
+docker compose exec bot pi install npm:pi-web-access   # add an extension
+docker compose exec bot pi update                      # extensions and model catalogs
+docker compose exec bot pi auth check --provider <name>
+```
+
+`pi auth check` prints `ready` or says what is wrong. It is the cheapest way
+to confirm a provider — no model call, no room, no waiting for a message to
+fail.
+
+**`exec` or `run`.** `exec` uses the container that is already up; `run --rm`
+starts a throwaway one with the same volumes, which is what to use when the
+bot is stopped. Either way the writes land in `/data/pi`, which is your bind
+mount, so they persist and survive the container being recreated.
+
+These commands take a lock on `settings.json`, so the data volume has to be
+writable — a read-only mount fails with `EROFS`.
+
+**An installed extension is not loaded yet.** The bot loads extensions when a
+room's session is created, so after installing one:
+
+- `.reload` in the main room re-reads extensions, skills, prompts and context
+  files for live sessions, or
+- restart the container.
+
+Then `.info` in any room reports what actually loaded, and names anything that
+failed — which is the point of it. Two bots once compared notes, both found
+zero skills, and concluded they matched; one had `pi-web-access` and the other
+had nothing.
+
 ## When it goes wrong
 
 | What you see | What it is |
@@ -146,6 +183,7 @@ flagging the session.
 | `npx` offers to install `pi@2.0.5` | That is not this pi. Run `pi` — the pinned binary is on `PATH` |
 | `Configuration property "matrix" is not defined` | node-config resolves from the working directory; the image sets `NODE_CONFIG_DIR=/app/config` |
 | `Allowing … MATRIX_ALLOWED_USERS is empty` on every message | Exactly what it says — step 2 |
+| `EROFS: read-only file system` from a `pi` command | Those commands lock `settings.json`; the data volume must be writable |
 | Two bots answering as the same account | Two containers on one `data/` volume. The instance lock stores a pid and cannot see across a PID namespace, so it will not catch this |
 
 ## What is not here yet
