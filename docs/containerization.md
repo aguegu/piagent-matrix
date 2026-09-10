@@ -1,8 +1,11 @@
 # Running it in a container
 
-Nothing here is built yet. This is the plan and the constraints it has to
-satisfy, written down first because most of them are things that fail *after* a
-clean build rather than during one.
+The `Dockerfile` works: a second bot runs from it, talks in Matrix, and has a
+cross-signed device. Cron is not in it yet — that is the next piece, and the
+decision behind it is recorded below.
+
+Most of what follows is constraints rather than instructions, because nearly
+every one of them fails *after* a clean build rather than during one.
 
 ## The goal: a sandbox the agent owns
 

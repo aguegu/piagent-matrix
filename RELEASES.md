@@ -2,6 +2,17 @@
 
 ## 0.3.0 (in progress)
 
+### New Features
+
+* **A `Dockerfile`.** `node:24-bookworm-slim`, because the crypto binding ships `linux-x64-gnu` and declares no musl variant — a musl image builds, starts, joins rooms, and dies on the first message. Install scripts are off except for that binding, which is *fetched* by its own postinstall, and the build then requires the module so a missing one fails the build rather than a room. `bash`, `ca-certificates`, `git` and `ripgrep` are installed because the agent's tools reach for them — pi's `grep` shells out to `rg`, which every host has had and so never looked like a dependency. Runs as uid 1000, matching a typical host account, so bind mounts need no ownership juggling
+* **Two volumes, split by lifetime rather than kind.** `/data` is small, precious and unregenerable — device identity, provider credentials, and the spools, which are the bot's own plumbing once the container is the sandbox rather than an interface to the host. `/sessions` is large and churning, where loss costs memory rather than identity. `/workspace` is the agent's own ground
+* **The image provisions itself.** Cross-signing runs from the image — `docker compose run --rm bot node /app/scripts/cross-sign.js` — finding this deployment's device through `DATA_DIR` and its credentials through the same environment the bot uses. That is why the build keeps `matrix-js-sdk` (about 10MB): an image that needs a git checkout to finish setting up is not a deployment, least of all one pulled from a registry
+* The image sets **both** agent-directory variables. `PI_AGENT_DIR` is this bot's and `PI_CODING_AGENT_DIR` is pi's, and the CLI reads only pi's — so with just ours set, an interactive `/login` writes to an unmounted `~/.pi/agent`, reports success, and is gone on the next run. `pi` is on `PATH` too, so `npx pi` cannot fall through to an unrelated public package of that name
+
+### Fixes
+
+* **`.env` is resolved from beside the code, not from the working directory.** dotenv-flow defaulted to `process.cwd()`, which is what made "start it from the repo root" a rule the README had to state — and in a container, whose working directory is the agent's workspace rather than the app, an `.env` that silently never loaded
+
 ### Documentation
 
 * **[docs/containerization.md](docs/containerization.md)** — the constraints before the Dockerfile, since most of them fail after a clean build rather than during one. Debian rather than Alpine, because the crypto binding ships `linux-x64-gnu` and declares no musl variant; install scripts disabled everywhere except the one package that is *fetched* by one; ripgrep in the image, because pi's `grep` tool shells out to `rg` and this host has always had it. What must outlive the container, with `data/` marked as the bot's Matrix identity rather than a cache. And cron split by what a job needs to see: the three that only produce a spool file can run inside, `hourly-stats.sh` cannot, because `df` and `free` in a container describe the container and the job would go on reporting the wrong machine
