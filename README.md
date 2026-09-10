@@ -167,7 +167,6 @@ room they are typed in — is answered only in the main room.
 | `npm start` | Run the bot |
 | `npm test` | `node --test` over `test/**/*.test.js` |
 | `npm run cross-sign [DEVICE_ID]` | Cross-sign the bot's device |
-| `scripts/cross-sign-container.sh <dir>` | The same, for a container deployment: reads its device and credentials, and refuses if they disagree |
 
 ## Layout
 

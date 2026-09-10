@@ -21,7 +21,11 @@ COPY package.json package-lock.json ./
 # skips it produces an image that looks fine until the first message. Rebuild
 # that package alone, then prove the binding actually loaded — failing here is
 # far cheaper than failing in a room.
-RUN npm ci --omit=dev --ignore-scripts \
+# Not --omit=dev. The single devDependency is matrix-js-sdk, which
+# cross-signing needs, and an image published to a registry has to be able to
+# provision itself — needing a git checkout to finish setting up a container
+# is not a deployment. It costs ~14MB against a 188MB image.
+RUN npm ci --ignore-scripts \
   && npm rebuild @matrix-org/matrix-sdk-crypto-nodejs \
   && node -e "require('@matrix-org/matrix-sdk-crypto-nodejs'); console.log('crypto binding OK')"
 

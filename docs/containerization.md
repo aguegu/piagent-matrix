@@ -188,23 +188,30 @@ disk.
 
 ## Cross-signing a container's device
 
-The image cannot do this itself: cross-signing needs `matrix-js-sdk`, a
-devDependency, absent from a build using `npm ci --omit=dev`. That is not a
-problem to solve — `scripts/cross-sign.js` was already built to stand apart,
-logging in as a throwaway device and never opening the bot's crypto store — so
-it runs from a checkout, pointed at the deployment:
+From the image, with no checkout involved:
 
 ```sh
-scripts/cross-sign-container.sh ~/containers/bk18pi2
-DRY_RUN=1 scripts/cross-sign-container.sh ~/containers/bk18pi2   # check first
+docker compose run --rm bot node /app/scripts/cross-sign.js
 ```
 
-It takes the device id from the deployment's own `data/token.json` and the
-credentials from its own `.env`, and **refuses if the two name different
-accounts** — credentials get copied between deployments, and signing a device
-with the wrong account's key is not a failure worth debugging from the far
-side. It also refuses on an empty password or recovery key, both of which
-otherwise fail deep inside the SDK.
+Everything it needs is already ambient in the container: `DATA_DIR=/data`, so
+it finds this deployment's device in `/data/token.json`, and the credentials
+come from the same `env_file` the bot uses. Nothing to pass, and nothing to
+get wrong by passing the wrong deployment's.
+
+This is why the image is built **without** `--omit=dev`. The single
+devDependency is `matrix-js-sdk`, which cross-signing needs, and an image that
+requires a git checkout to finish provisioning is not really a deployment —
+particularly one pulled from a registry. It costs about 10MB.
+
+The script is safe to run against a live container: it logs in as a *throwaway*
+device, signs the target device id, and logs out. It never opens the bot's
+crypto store, so none of the two-writers hazard applies.
+
+Absolute path rather than `npm run cross-sign`, because the working directory
+is `/workspace` and npm would look for `package.json` there. Node resolves a
+script's imports from the script's own location, so the absolute path works
+from anywhere.
 
 The device id itself is the homeserver's, minted when the container first
 logged in; `MATRIX_DEVICE_NAME` is only the label beside it in Element. Delete
@@ -221,12 +228,6 @@ again — which is the whole reason `data/` is mounted.
 - **Isolation is not the same as safety here.** The agent runs `bash` with no
   approval gate. A container bounds what that reaches, which is worth having,
   but `MATRIX_ALLOWED_USERS` is still the thing deciding who may drive it.
-- **Provisioning still needs a checkout.** Cross-signing runs from the repo
-  rather than the image, because the SDK it needs is a devDependency. The
-  image therefore leaves `scripts/` and `test/` out altogether — a script
-  that is present but cannot work is worse than one that is absent, since
-  someone will try it. Fine for a once-per-device operation, but it means a
-  deployment directory is not quite self-contained.
 - **Anything bind-mounted is not isolated.** A mounted workspace with API keys
   in it is as reachable from the container as it was from the host. Mounting
   the host's real workspace into the sandbox gives most of the boundary away,
