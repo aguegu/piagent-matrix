@@ -47,8 +47,14 @@ COPY . .
 # arrive somewhere this file never mentions. Wrong, pi falls back to ~/.pi,
 # which here is an unmounted path: the provider credentials would vanish on
 # restart and the bot would ask to be logged in again.
+# Both names, deliberately. PI_AGENT_DIR is this bot's; PI_CODING_AGENT_DIR is
+# pi's own, and the pi CLI reads only the latter. Set just ours and an
+# interactive `pi /login` writes to ~/.pi/agent inside the container — an
+# unmounted path — so the login looks like it worked and is gone on the next
+# run. The bot sets pi's variable at runtime anyway; this makes the CLI agree.
 ENV DATA_DIR=/data \
     PI_AGENT_DIR=/data/pi \
+    PI_CODING_AGENT_DIR=/data/pi \
     SESSION_DIR=/sessions \
     INBOX_DIR=/data/inbox \
     OUTBOX_DIR=/data/outbox \

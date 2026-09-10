@@ -174,9 +174,16 @@ called `pi` — a stranger's code behind a `(y)` prompt. The image puts the
 pinned binary on `PATH` instead, so `pi` always means the version this image
 was built against.
 
-The login lands in `PI_AGENT_DIR` (`/data/pi`), which is part of the data
-volume, so the sandbox holds its own credentials rather than borrowing the
-host bot's. A provider key in the environment works too, and writes nothing to
+The login lands in `/data/pi`, which is part of the data volume, so the sandbox
+holds its own credentials rather than borrowing the host bot's.
+
+That works only because the image sets **both** names. `PI_AGENT_DIR` is this
+bot's variable; `PI_CODING_AGENT_DIR` is pi's own, and **the CLI reads only
+pi's**. With just ours set, `/login` writes to `~/.pi/agent` inside the
+container — an unmounted path — so it reports success, and the next run starts
+with `No API key found for the selected model`. This is the same trap
+[configuration](configuration.md) warns about on the host, and a container
+makes it worse by discarding the evidence on exit. A provider key in the environment works too, and writes nothing to
 disk.
 
 ## Known limits
