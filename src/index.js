@@ -605,6 +605,41 @@ function describeSessionReport(stats) {
   return lines.join("\n");
 }
 
+/**
+ * What to tell the agent about scheduling, which differs by deployment.
+ *
+ * With a crontab file configured there is no cron daemon and no `crontab`
+ * command — the agent has to know that, because it cannot find out: it tried
+ * `at`, then `crontab`, then settled for `nohup sleep 300` and reported
+ * success. Without one, this says nothing: a host has a real cron the agent
+ * already knows how to drive.
+ *
+ * Values are interpolated here rather than left as placeholders, because
+ * fillTemplate is a single pass and would not expand them again.
+ */
+function describeScheduling({ crontabFile, inbox, outbox }) {
+  if (!crontabFile) return "";
+  return [
+    "## Scheduling something to repeat",
+    "",
+    "There is no cron daemon here and no `crontab` command. The schedule is a",
+    `file: \`${crontabFile}\`. Add a line in the ordinary five-field format and`,
+    "save it — something watches the file and picks the change up at once, so",
+    "there is nothing to restart and nothing to reload.",
+    "",
+    "**A job does not run where you do.** It runs in a separate container that",
+    "has the workspace and the spools and nothing else: no Matrix, no host, and",
+    "almost no environment — not your `PATH`, not your shell's variables. Use",
+    "absolute paths, and run the command yourself first to see it work.",
+    "",
+    "**A job cannot speak.** It has no room to speak into, so what it produces",
+    `is a file: a prompt in \`${inbox}\` to wake you, or finished text in`,
+    `\`${outbox}\` to be posted. Choose between them as above — by who has to`,
+    "think.",
+    "",
+  ].join("\n");
+}
+
 function describeContextLine({ tokens, window }) {
   if (!tokens) return "not measured yet — after the next reply";
   const n = tokens.toLocaleString("en-US");
@@ -763,6 +798,11 @@ async function main() {
   // data/token.json, and the agent should not be the last to know.
   const userId = await client.getUserId().catch(() => matrix.userId);
   installAgentResources(resolve(config.get("agent.agentDir")), {
+    SCHEDULING: describeScheduling({
+      crontabFile: config.get("agent.crontabFile"),
+      inbox: resolve(config.get("inbox.dir")),
+      outbox: resolve(config.get("outbox.dir")),
+    }),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),

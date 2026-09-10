@@ -91,7 +91,8 @@ ENV DATA_DIR=/data \
     SESSION_DIR=/sessions \
     INBOX_DIR=/data/inbox \
     OUTBOX_DIR=/data/outbox \
-    BOT_CWD=/workspace
+    BOT_CWD=/workspace \
+    CRONTAB_FILE=/data/crontab
 RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
   && chown -R node:node /data /sessions /workspace
 

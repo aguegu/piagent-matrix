@@ -102,12 +102,40 @@ describe("installing the bot's standing instructions", () => {
     // Guards the pairing between agent/*.md and the values index.js passes.
     const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
     const used = [...new Set([...shipped.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].sort();
-    assert.deepEqual(used, ["BOT_CWD", "BOT_NAME", "DATA_DIR", "INBOX_DIR", "MATRIX_USER_ID", "OUTBOX_DIR"]);
+    assert.deepEqual(used, [
+      "BOT_CWD", "BOT_NAME", "DATA_DIR", "INBOX_DIR", "MATRIX_USER_ID", "OUTBOX_DIR",
+      // A whole paragraph rather than a path, and empty where a real cron
+      // exists — see describeScheduling in index.js.
+      "SCHEDULING",
+    ]);
   });
 
   it("ships an AGENTS.md that tells the agent where its record is", () => {
     const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
     assert.match(shipped, /\{\{DATA_DIR\}\}\/main-room\.json/, "asked to read the record, not told");
     assert.doesNotMatch(shipped, /token\.json`[^)]*read/, "and warned off the credentials beside it");
+  });
+});
+
+describe("what the agent is told about scheduling", () => {
+  // The agent cannot discover this: in a container there is no cron daemon
+  // and no `crontab`. Asked to schedule something it tried `at`, then
+  // `crontab`, then settled for `nohup sleep 300` and reported success.
+  const render = (vars) => fillTemplate("before\n{{SCHEDULING}}after\n", vars);
+
+  it("says nothing where a real cron exists", () => {
+    assert.equal(render({ SCHEDULING: "" }), "before\nafter\n");
+  });
+
+  it("names the file, and that saving is enough", () => {
+    const out = render({ SCHEDULING: "The schedule is `/data/crontab`. Save it.\n" });
+    assert.match(out, /\/data\/crontab/);
+    assert.match(out, /Save it/);
+  });
+
+  it("leaves an unknown placeholder alone rather than blanking it", () => {
+    // A var nobody supplies must stay visible, so a missing one is noticed
+    // rather than silently producing an instruction with a hole in it.
+    assert.match(fillTemplate("x {{NOT_SUPPLIED}} y", {}), /\{\{NOT_SUPPLIED\}\}/);
   });
 });

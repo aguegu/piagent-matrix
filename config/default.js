@@ -91,5 +91,10 @@ export default {
     agentDir: process.env.PI_AGENT_DIR || `${dataDir}/pi`,
     // Told to the agent so it can address messages it schedules for later.
     outboxDir: process.env.OUTBOX_DIR || "./outbox",
+    // A crontab file the agent may edit, watched by something that runs the
+    // jobs — supercronic, in the container images. Empty on a host with a
+    // real cron daemon, where `crontab` works and the agent already knows it.
+    // What the agent is told about scheduling follows from this being set.
+    crontabFile: process.env.CRONTAB_FILE || "",
   },
 };
