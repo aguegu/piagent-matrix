@@ -31,7 +31,7 @@ import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
-import { installAgentResources } from "./resources.js";
+import { installAgentResources, renderPart } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
@@ -605,53 +605,17 @@ function describeSessionReport(stats) {
   return lines.join("\n");
 }
 
-/**
- * What to tell the agent about scheduling, which differs by deployment.
- *
- * With a crontab file configured there is no cron daemon and no `crontab`
- * command — the agent has to know that, because it cannot find out: it tried
- * `at`, then `crontab`, then settled for `nohup sleep 300` and reported
- * success. Without one, this says nothing: a host has a real cron the agent
- * already knows how to drive.
- *
- * Values are interpolated here rather than left as placeholders, because
- * fillTemplate is a single pass and would not expand them again.
- */
-function describeScheduling({ crontabFile, inbox, outbox }) {
+/** The scheduling section, or nothing where a real cron daemon exists. */
+function schedulingSection() {
+  const crontabFile = config.get("agent.crontabFile");
   if (!crontabFile) return "";
-  const log = `${dirname(crontabFile)}/cron.log`;
-  const alive = `${dirname(crontabFile)}/cron-alive`;
-  return [
-    "## Scheduling something to repeat",
-    "",
-    "There is no cron daemon here and no `crontab` command. The schedule is a",
-    `file: \`${crontabFile}\`. Add a line in the ordinary five-field format and`,
-    "save it — the change is picked up at once, with nothing to restart.",
-    "",
-    "**The scheduler is in another container**, so looking for it here finds",
-    "nothing: no `cron` in `ps`, no `crontab`, no `at`. That is expected and",
-    "does not mean your job will not run. Do not conclude from a missing daemon",
-    "that scheduling is broken — check instead:",
-    "",
-    `- \`${alive}\` is refreshed by a heartbeat job. A timestamp within the last`,
-    "  few minutes means the scheduler is alive and reading the file.",
-    `- End each of your own lines with \`>> ${log} 2>&1\` and read that file.`,
-    "  It is the only way you can see whether a job ran and what it said — the",
-    "  scheduler's own log goes somewhere you cannot reach.",
-    "",
-    "**A job does not run where you do.** It runs in that other container, with",
-    "the workspace and the spools and nothing else: no Matrix, no host, and",
-    "almost no environment — not your `PATH`, not your shell's variables. Use",
-    "absolute paths. Run the command yourself first: quoting that survives your",
-    "shell can still be mangled on its way into a crontab line, and the failure",
-    "is silent unless you are logging.",
-    "",
-    "**A job cannot speak.** It has no room to speak into, so what it produces",
-    `is a file: a prompt in \`${inbox}\` to wake you, or finished text in`,
-    `\`${outbox}\` to be posted. Choose between them as above — by who has to`,
-    "think.",
-    "",
-  ].join("\n");
+  return renderPart("scheduling-crontab", {
+    CRONTAB_FILE: crontabFile,
+    CRON_LOG: join(dirname(crontabFile), "cron.log"),
+    CRON_ALIVE: join(dirname(crontabFile), "cron-alive"),
+    INBOX_DIR: resolve(config.get("inbox.dir")),
+    OUTBOX_DIR: resolve(config.get("outbox.dir")),
+  });
 }
 
 function describeContextLine({ tokens, window }) {
@@ -812,11 +776,10 @@ async function main() {
   // data/token.json, and the agent should not be the last to know.
   const userId = await client.getUserId().catch(() => matrix.userId);
   installAgentResources(resolve(config.get("agent.agentDir")), {
-    SCHEDULING: describeScheduling({
-      crontabFile: config.get("agent.crontabFile"),
-      inbox: resolve(config.get("inbox.dir")),
-      outbox: resolve(config.get("outbox.dir")),
-    }),
+    // Deployment-specific sections live in agent/parts/ and are pulled in
+    // where they apply. A host with a real cron gets nothing here, because
+    // the agent already knows how to drive `crontab`.
+    SCHEDULING: schedulingSection(),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),

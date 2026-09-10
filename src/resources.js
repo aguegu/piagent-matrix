@@ -27,6 +27,24 @@ import { LogService } from "matrix-bot-sdk";
 export const SHIPPED = fileURLToPath(new URL("../agent", import.meta.url));
 
 /**
+ * Optional sections of AGENTS.md, kept as markdown rather than as strings in
+ * code. They are not installed on their own — `agent/*.md` is what ships —
+ * and a caller pulls in the ones a deployment needs.
+ */
+export const PARTS = fileURLToPath(new URL("../agent/parts", import.meta.url));
+
+/**
+ * One optional section, filled in and ready to substitute into AGENTS.md.
+ *
+ * Filling here rather than letting the caller pass it through raw is what
+ * makes a part's own `{{...}}` work: the main pass is a single replace, so a
+ * placeholder arriving inside a substituted value would be left as written.
+ */
+export function renderPart(name, vars = {}) {
+  return fillTemplate(readFileSync(join(PARTS, `${name}.md`), "utf8"), vars);
+}
+
+/**
  * Marks a file as the bot's to rewrite.
  *
  * AGENTS.md is also where an operator would put their own standing

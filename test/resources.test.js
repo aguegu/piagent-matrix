@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { fillTemplate, installAgentResources, MANAGED, SHIPPED } from "../src/resources.js";
+import { fillTemplate, installAgentResources, MANAGED, PARTS, renderPart, SHIPPED } from "../src/resources.js";
 
 describe("filling a template", () => {
   it("substitutes what it knows", () => {
@@ -137,5 +137,45 @@ describe("what the agent is told about scheduling", () => {
     // A var nobody supplies must stay visible, so a missing one is noticed
     // rather than silently producing an instruction with a hole in it.
     assert.match(fillTemplate("x {{NOT_SUPPLIED}} y", {}), /\{\{NOT_SUPPLIED\}\}/);
+  });
+});
+
+describe("optional sections of AGENTS.md", () => {
+  // Prose belongs in markdown. The scheduling section used to be 36 lines of
+  // strings in a JS array with escaped backticks, which is a poor place to
+  // edit an instruction that has already been rewritten twice.
+
+  it("fills a part's own placeholders, which the main pass cannot", () => {
+    // fillTemplate is a single replace, so a {{...}} arriving inside a
+    // substituted value would reach the agent as written.
+    const out = renderPart("scheduling-crontab", {
+      CRONTAB_FILE: "/data/crontab",
+      CRON_LOG: "/data/cron.log",
+      CRON_ALIVE: "/data/cron-alive",
+      INBOX_DIR: "/data/inbox",
+      OUTBOX_DIR: "/data/outbox",
+    });
+    assert.doesNotMatch(out, /\{\{/, "no placeholder survives into the agent's copy");
+    for (const v of ["/data/crontab", "/data/cron-alive", "/data/cron.log", "/data/inbox"]) {
+      assert.ok(out.includes(v), `${v} is named`);
+    }
+  });
+
+  it("supplies every placeholder each shipped part uses", () => {
+    // The same guard AGENTS.md has, for the parts beside it.
+    const supplied = ["CRONTAB_FILE", "CRON_LOG", "CRON_ALIVE", "INBOX_DIR", "OUTBOX_DIR"];
+    for (const file of readdirSync(PARTS).filter((n) => n.endsWith(".md"))) {
+      const text = readFileSync(join(PARTS, file), "utf8");
+      for (const [, name] of text.matchAll(/\{\{(\w+)\}\}/g)) {
+        assert.ok(supplied.includes(name), `${file} uses {{${name}}}, which nothing supplies`);
+      }
+    }
+  });
+
+  it("does not install the parts directory as a context file", () => {
+    // pi reads one context file per directory; a stray parts/ copied into
+    // PI_AGENT_DIR would be clutter at best.
+    assert.ok(!readdirSync(SHIPPED).includes("parts.md"));
+    assert.ok(readdirSync(SHIPPED).includes("parts"), "parts is a directory beside the shipped files");
   });
 });

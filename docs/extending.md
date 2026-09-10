@@ -54,6 +54,34 @@ which meant advertising a command that did nothing on any other install.
 Drop a skill in `data/pi/skills/` and it is available as `/skill:<name>` in
 every room, once you `.reload` (or restart).
 
+## Sections that depend on the deployment
+
+`agent/AGENTS.md` is the same for every bot, because almost everything in it
+is a fact about this harness rather than about a machine. Where a fact
+genuinely differs, the difference is a **part**: a markdown file in
+`agent/parts/`, pulled into a `{{PLACEHOLDER}}` where it applies and left
+empty where it does not.
+
+There is one today. `{{SCHEDULING}}` becomes `parts/scheduling-crontab.md`
+when `CRONTAB_FILE` is set — a container, where there is no cron daemon and
+the schedule is a file — and nothing on a host, where real `cron` exists and
+the agent already knows how to drive it.
+
+Adding one:
+
+1. write `agent/parts/<name>.md`, with `{{VARS}}` for anything path-like;
+2. in `src/index.js`, decide from config whether it applies, and
+   `renderPart("<name>", { … })` if so;
+3. add its placeholder to the guard in `test/resources.test.js`, which asserts
+   every placeholder the shipped files use is actually supplied.
+
+Two rules worth keeping. **Prose belongs in markdown** — that section spent a
+day as 36 lines of strings in a JS array with escaped backticks, which is a
+bad place to edit an instruction that has been rewritten twice already. And
+**a part is filled before it is substituted**, because the main pass is a
+single replace: a `{{…}}` arriving inside a value would reach the agent
+exactly as written.
+
 ## Context files — the closest thing to memory
 
 pi reads `AGENTS.md` (or `CLAUDE.md`) from two places, and both persist across
