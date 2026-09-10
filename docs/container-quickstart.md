@@ -160,15 +160,21 @@ mount, so they persist and survive the container being recreated.
 These commands take a lock on `settings.json`, so the data volume has to be
 writable — a read-only mount fails with `EROFS`.
 
-**An installed extension is not loaded yet.** The bot loads extensions when a
-room's session is created, so after installing one:
+**A newly installed extension needs the container restarted.** `.reload` is
+not enough — observed with `npm:pi-web-access`, installed and then invisible
+until:
 
-- `.reload` in the main room re-reads extensions, skills, prompts and context
-  files for live sessions, or
-- restart the container.
+```sh
+docker compose restart bot     # or: docker compose up -d --build
+```
 
-Then `.info` in any room reports what actually loaded, and names anything that
-failed — which is the point of it. Two bots once compared notes, both found
+`.reload` does pick up *changes to resources already in place* — an edited
+`AGENTS.md`, a changed prompt — so it is still the right first reach for those.
+A package that did not exist when the process started is a different matter.
+
+Either way, confirm rather than assume: `.info` in any room reports which
+extensions actually loaded, and names anything that failed — which is the point
+of it. Two bots once compared notes, both found
 zero skills, and concluded they matched; one had `pi-web-access` and the other
 had nothing.
 
@@ -183,6 +189,7 @@ had nothing.
 | `npx` offers to install `pi@2.0.5` | That is not this pi. Run `pi` — the pinned binary is on `PATH` |
 | `Configuration property "matrix" is not defined` | node-config resolves from the working directory; the image sets `NODE_CONFIG_DIR=/app/config` |
 | `Allowing … MATRIX_ALLOWED_USERS is empty` on every message | Exactly what it says — step 2 |
+| An installed extension does not appear in `.info` | `.reload` does not pick up a package installed after the process started. Restart the container |
 | `EROFS: read-only file system` from a `pi` command | Those commands lock `settings.json`; the data volume must be writable |
 | Two bots answering as the same account | Two containers on one `data/` volume. The instance lock stores a pid and cannot see across a PID namespace, so it will not catch this |
 
