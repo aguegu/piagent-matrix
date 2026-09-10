@@ -186,6 +186,31 @@ with `No API key found for the selected model`. This is the same trap
 makes it worse by discarding the evidence on exit. A provider key in the environment works too, and writes nothing to
 disk.
 
+## Cross-signing a container's device
+
+The image cannot do this itself: cross-signing needs `matrix-js-sdk`, a
+devDependency, absent from a build using `npm ci --omit=dev`. That is not a
+problem to solve — `scripts/cross-sign.js` was already built to stand apart,
+logging in as a throwaway device and never opening the bot's crypto store — so
+it runs from a checkout, pointed at the deployment:
+
+```sh
+scripts/cross-sign-container.sh ~/containers/bk18pi2
+DRY_RUN=1 scripts/cross-sign-container.sh ~/containers/bk18pi2   # check first
+```
+
+It takes the device id from the deployment's own `data/token.json` and the
+credentials from its own `.env`, and **refuses if the two name different
+accounts** — credentials get copied between deployments, and signing a device
+with the wrong account's key is not a failure worth debugging from the far
+side. It also refuses on an empty password or recovery key, both of which
+otherwise fail deep inside the SDK.
+
+The device id itself is the homeserver's, minted when the container first
+logged in; `MATRIX_DEVICE_NAME` is only the label beside it in Element. Delete
+`data/` and the next start gets a different device, and this has to be done
+again — which is the whole reason `data/` is mounted.
+
 ## Known limits
 
 - **The instance lock does not cross machines.** `data/bot.lock` holds a pid and
@@ -196,6 +221,10 @@ disk.
 - **Isolation is not the same as safety here.** The agent runs `bash` with no
   approval gate. A container bounds what that reaches, which is worth having,
   but `MATRIX_ALLOWED_USERS` is still the thing deciding who may drive it.
+- **Provisioning still needs a checkout.** Cross-signing runs from the repo
+  rather than the image, because the SDK it needs is a devDependency. Fine for
+  a once-per-device operation, but it means a deployment directory is not
+  quite self-contained.
 - **Anything bind-mounted is not isolated.** A mounted workspace with API keys
   in it is as reachable from the container as it was from the host. Mounting
   the host's real workspace into the sandbox gives most of the boundary away,
