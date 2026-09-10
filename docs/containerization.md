@@ -4,6 +4,18 @@ Nothing here is built yet. This is the plan and the constraints it has to
 satisfy, written down first because most of them are things that fail *after* a
 clean build rather than during one.
 
+## The goal: a sandbox the agent owns
+
+The container is the agent's own world. It runs `bash` with no approval gate,
+so the point of the boundary is that what it reaches is what we chose to give
+it — and, just as much, that it need not care about anything outside.
+
+That decides more than it first appears. The spools stop being an interface to
+the host and become the bot's own plumbing, so they live with the rest of its
+state rather than being mounted through. Work that genuinely belongs to the
+host — reporting on the host's own disks, say — stops being this bot's job
+rather than being wired back in through a hole in the boundary.
+
 ## What is being containerized
 
 pi ships [its own containerization guide](https://pi.dev/docs/latest/containerization),
@@ -59,14 +71,17 @@ Losing any of these is not "losing a cache".
 | --- | --- | --- |
 | `data/` | `DATA_DIR` | **The bot's identity.** `token.json` and `crypto/` are a matched pair; without them every start is a new device, undecryptable to everyone until `npm run cross-sign` runs again. Also holds `main-room.json`, `agent.json` and `bot.lock` |
 | `sessions/` | `SESSION_DIR` | Every room's memory. The bot still runs, and answers as though it has never met anyone |
-| `inbox/` | `INBOX_DIR` | Work in flight. This is also a **bind mount, not a named volume**, if anything on the host drops jobs |
-| `outbox/` | `OUTBOX_DIR` | Text waiting to be posted, same reasoning |
-| the agent's workspace | `BOT_CWD` | Whatever the agent has been building. On this deployment that is the trading workspaces |
-| the crontab file | — | The agent's own schedule. A plain file, deliberately: see below |
+| `data/inbox`, `data/outbox` | `INBOX_DIR`, `OUTBOX_DIR` | Work in flight and text waiting to be posted. Inside `data/` deliberately — they are no longer a host interface, and a parked `.failed` is the audit trail that diagnosed the digest bug, so it belongs where the rest of the state is kept |
+| the agent's workspace | `BOT_CWD` | Whatever the agent has been building |
+| the crontab file | — | The agent's own schedule. A plain file, deliberately: see below. It lives in `data/` too |
 
 `PI_AGENT_DIR` defaults inside `DATA_DIR`, so it is covered — but it holds
 provider credentials, which is worth knowing before mounting `data/` anywhere
 convenient.
+
+Two volumes, split by lifetime rather than by kind. `data/` is small, precious
+and unregenerable; `sessions/` is large and churning, and losing it costs
+memory rather than identity. Different backup policies, so different volumes.
 
 ## Cron
 
@@ -83,13 +98,15 @@ trading-tick, trading-digest   workspace dir → inbox
 weather-cron                   curl → inbox
 ```
 
-**Jobs that report on the host must stay on the host.** `hourly-stats.sh` runs
-`df` and `free`. Inside a container those describe the container, so the job
-would keep working and quietly report the wrong machine. Left on host cron it
-writes into the bind-mounted `inbox/`, which needs no access to the container
-at all — so this costs nothing.
+**Jobs that report on the host are not this bot's job any more.**
+`hourly-stats.sh` runs `df` and `free`; inside a container those describe the
+container, so it would keep working while reporting the wrong machine. The
+tempting fix — leave it on host cron and mount the inbox through — puts a hole
+in the boundary for the sake of one report. Host monitoring belongs to the
+host, by some route that is not the agent's sandbox.
 
-That is the split: **by what a job needs to see**, not by convenience.
+That is the split: **by what a job needs to see**, and a job that needs to see
+the host does not belong in here.
 
 ### The decision: a crontab file, not a crontab
 
@@ -148,7 +165,13 @@ Two things to test before committing to it:
   approval gate. A container bounds what that reaches, which is worth having,
   but `MATRIX_ALLOWED_USERS` is still the thing deciding who may drive it.
 - **Anything bind-mounted is not isolated.** A mounted workspace with API keys
-  in it is as reachable from the container as it was from the host.
+  in it is as reachable from the container as it was from the host. Mounting
+  the host's real workspace into the sandbox gives most of the boundary away,
+  which is a decision worth making on purpose rather than for convenience.
+- **The spools are still command channels**, wherever they live. Anything that
+  can write the inbox can make the agent run a prompt; anything that can write
+  the outbox can post to a room as the bot. Keeping them inside `data/` is what
+  keeps that reach inside the sandbox.
 
 ---
 

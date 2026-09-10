@@ -27,16 +27,26 @@ RUN npm ci --omit=dev --ignore-scripts \
 
 COPY . .
 
-# Everything the bot must not lose lives outside the image. Created here so
-# they exist and belong to the runtime user even when nothing is mounted over
-# them; see docs/containerization.md for what each one is.
+# Two volumes, by lifetime rather than by kind. Created here so they exist and
+# belong to the runtime user even when nothing is mounted over them.
+# See docs/containerization.md.
+#
+# /data is everything the bot cannot lose and cannot regenerate: the device
+# identity, the provider credentials, and — because the container is the
+# sandbox — the spools too. They were a host interface when cron lived outside;
+# inside, they are the bot's own plumbing, and putting them here means one
+# thing to persist and one place the parked `.failed` files can be read from.
+#
+# /sessions is kept apart on purpose: it is large and churning where /data is
+# small and precious, and losing it costs memory rather than identity. That is
+# a different backup policy, so it gets a different volume.
 ENV DATA_DIR=/data \
     SESSION_DIR=/sessions \
-    INBOX_DIR=/inbox \
-    OUTBOX_DIR=/outbox \
+    INBOX_DIR=/data/inbox \
+    OUTBOX_DIR=/data/outbox \
     BOT_CWD=/workspace
-RUN mkdir -p /data /sessions /inbox /outbox /workspace \
-  && chown -R node:node /data /sessions /inbox /outbox /workspace
+RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
+  && chown -R node:node /data /sessions /workspace
 
 # uid 1000, which matches the host account this is developed on, so a bind
 # mount needs no ownership juggling.
