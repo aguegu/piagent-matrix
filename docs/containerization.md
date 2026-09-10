@@ -62,7 +62,7 @@ Losing any of these is not "losing a cache".
 | `inbox/` | `INBOX_DIR` | Work in flight. This is also a **bind mount, not a named volume**, if anything on the host drops jobs |
 | `outbox/` | `OUTBOX_DIR` | Text waiting to be posted, same reasoning |
 | the agent's workspace | `BOT_CWD` | Whatever the agent has been building. On this deployment that is the trading workspaces |
-| `/var/spool/cron/crontabs` | — | The agent's own schedule; see below |
+| the crontab file | — | The agent's own schedule. A plain file, deliberately: see below |
 
 `PI_AGENT_DIR` defaults inside `DATA_DIR`, so it is covered — but it holds
 provider credentials, which is worth knowing before mounting `data/` anywhere
