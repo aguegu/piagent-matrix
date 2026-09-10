@@ -1,5 +1,7 @@
 # Releases
 
+## 0.3.0 (in progress)
+
 ## 0.2.5 (2026-09-10)
 
 Two things, both found by watching what the bots were actually doing rather
