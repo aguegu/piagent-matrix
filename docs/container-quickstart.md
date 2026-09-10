@@ -19,13 +19,24 @@ happens to cron — see [containerization](containerization.md).
   owner".
 - **A model provider** you can log in to.
 
-## 1. Build the image
-
-Not published to a registry yet, so build it from a checkout:
+## 1. Get the image
 
 ```sh
-git clone <this repo> piagent-matrix && cd piagent-matrix
-docker build -t piagent-matrix:latest .
+docker pull aguegu/piagent-matrix:edge
+```
+
+`edge` is the current build while 0.3.0 is still open; there is no `latest`
+yet, deliberately, so nothing pulls an unreleased image by accident.
+
+**linux/amd64 only.** The crypto binding ships `linux-x64-gnu` with no musl
+build, and supercronic is pinned to amd64. On another architecture this fails
+at exec rather than quietly misbehaving.
+
+Or build it yourself, which is the same thing:
+
+```sh
+git clone https://github.com/aguegu/piagent-matrix && cd piagent-matrix
+docker build -t piagent-matrix:local .
 ```
 
 The build ends by loading the crypto binding, so if it succeeds the binding is
@@ -51,7 +62,7 @@ start and then fail to write its own token.
 ```yaml
 services:
   bot:
-    image: piagent-matrix:latest
+    image: aguegu/piagent-matrix:edge
     container_name: mybot
     env_file: .env
     init: true                 # the agent spawns shells constantly; reap them

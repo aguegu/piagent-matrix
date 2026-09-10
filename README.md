@@ -220,7 +220,7 @@ directory, and consider passing an explicit `tools` allowlist to
 | [More than one bot in a room](docs/multi-bot.md) | `m.notice`, and bounding a run of bots answering bots |
 | [Extending the agent](docs/extending.md) | extensions, skills, prompt templates, and the shipped `AGENTS.md` |
 | [Running it](docs/operations.md) | cross-signing, what lives in `data/`, known gaps |
-| [Container quickstart](docs/container-quickstart.md) | nothing to a verified bot in six steps, and the failures it actually hits |
+| [Container quickstart](docs/container-quickstart.md) | `docker pull aguegu/piagent-matrix:edge` — nothing to a verified bot in six steps, and the failures it actually hits |
 | [In a container](docs/containerization.md) | why it is shaped that way: base image, what must survive, and what happens to cron |
 | [pi integration](docs/pi-integration.md) | pi API notes and the behaviour that is easy to get wrong |
 | [SECURITY.md](SECURITY.md) | blast radius, and the dependency advisories |

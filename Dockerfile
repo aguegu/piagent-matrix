@@ -48,6 +48,18 @@ RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/${SUPE
   && mv supercronic-linux-amd64 /usr/local/bin/supercronic \
   && supercronic -version
 
+# Provenance, for an image someone pulls rather than builds: where the source
+# is, what it is, and which platform it can possibly run on. The crypto
+# binding is linux-x64-gnu with no musl build and supercronic is pinned to
+# amd64, so this is an amd64 image and says so.
+ARG VERSION=0.3.0-dev
+LABEL org.opencontainers.image.title="piagent-matrix" \
+      org.opencontainers.image.description="A Matrix bot that fronts the pi coding agent" \
+      org.opencontainers.image.source="https://github.com/aguegu/piagent-matrix" \
+      org.opencontainers.image.documentation="https://github.com/aguegu/piagent-matrix/blob/main/docs/container-quickstart.md" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}"
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./
