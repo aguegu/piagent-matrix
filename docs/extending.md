@@ -89,14 +89,14 @@ version to compare against or copy back if you want ours again. Nothing needs a 
 and nothing needs a variable.
 
 `AGENT_PARTS` only seeds a **fresh** install — the first start creates
-`parts-enabled/` with those links, and never touches it again. An empty
+`parts-enabled/` with those copies, and never touches it again. An empty
 directory after that means everything is off, which is a choice rather than
 something to correct on the next boot.
 
 The enabled sections are joined into `{{PARTS}}` in `AGENTS.md`. One bag of
 values serves them all, and a part takes what it needs — `{{DATA_DIR}}`,
 `{{SESSION_DIR}}`, `{{BOT_CWD}}`, `{{INBOX_DIR}}`, `{{OUTBOX_DIR}}`,
-`{{CRONTAB_FILE}}`, `{{CRON_LOG}}`, `{{CRON_ALIVE}}`.
+`{{CRONTAB_FILE}}`, `{{CRON_LOG}}`.
 
 Writing one of your own needs no checkout and no rebuild: a markdown file in
 `$DATA_DIR/parts-available/`, a copy in `parts-enabled/`, restart. Editing one of ours

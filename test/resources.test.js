@@ -165,7 +165,7 @@ describe("optional sections of AGENTS.md", () => {
 
   it("supplies every placeholder each shipped part uses", () => {
     // The same guard AGENTS.md has, for the parts beside it.
-    const supplied = ["CRONTAB_FILE", "CRON_LOG", "CRON_ALIVE", "INBOX_DIR", "OUTBOX_DIR",
+    const supplied = ["CRONTAB_FILE", "CRON_LOG", "INBOX_DIR", "OUTBOX_DIR",
                       "DATA_DIR", "SESSION_DIR", "BOT_CWD"];
     for (const file of readdirSync(PARTS).filter((n) => n.endsWith(".md"))) {
       const text = readFileSync(join(PARTS, file), "utf8");
@@ -207,7 +207,7 @@ describe("available parts, and which are enabled", () => {
   const vars = {
     DATA_DIR: "/data", SESSION_DIR: "/sessions", BOT_CWD: "/workspace",
     INBOX_DIR: "/data/inbox", OUTBOX_DIR: "/data/outbox",
-    CRONTAB_FILE: "/data/crontab", CRON_LOG: "/data/cron.log", CRON_ALIVE: "/data/cron-alive",
+    CRONTAB_FILE: "/data/crontab", CRON_LOG: "/data/cron.log",
   };
   let data, avail, enabled;
   beforeEach(() => {
@@ -263,7 +263,7 @@ describe("available parts, and which are enabled", () => {
     seedEnabled(enabled, avail, ["living-in-container"]);
 
     assert.match(enabledParts(enabled, vars), /my own choosing/, "the edit survives a restart");
-    assert.match(readFileSync(join(avail, "living-in-container.md"), "utf8"), /not shared with anything/,
+    assert.match(readFileSync(join(avail, "living-in-container.md"), "utf8"), /You cannot reach the host/,
       "and the shipped text is still there to copy back");
   });
 

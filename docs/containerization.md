@@ -2,8 +2,9 @@
 
 The `Dockerfile` works: a second bot runs from it, talks in Matrix, and has a
 cross-signed device. For the steps rather than the reasoning, see the
-[container quickstart](container-quickstart.md). Cron is not in it yet — that is the next piece, and the
-decision behind it is recorded below.
+[container quickstart](container-quickstart.md). Scheduling is in it too, as a
+`supercronic` process the bot starts and supervises; the reasoning, including
+the two arrangements that came first, is recorded below.
 
 Most of what follows is constraints rather than instructions, because nearly
 every one of them fails *after* a clean build rather than during one.
@@ -193,18 +194,78 @@ The rejected alternatives, for the record:
   hands the container arbitrary host command execution. The isolation would be
   theatre.
 
-### Settled: two containers
+### Settled: a child of the bot, after a detour through two containers
 
-`supercronic` is a separate process either way, so it runs in its own
-container rather than beside the bot under a supervisor. They need nothing
-from each other: a job's entire output is a file in `/data/inbox`, which is
-the interface the spool already was. One process each, no init script holding
-two services together, and a scheduler that dies does so visibly instead of
-silently.
+It ran as its own container first. The argument was one process each, no init
+script holding two services together, and a scheduler that dies doing so
+visibly instead of silently. The last clause was the mistake: it dies visibly
+*to the host operator*, and invisibly to the only party that schedules
+anything.
 
-The cron container gets `/data` and the workspace, and deliberately **not** the
-bot's `env_file` — the Matrix password and recovery key are no business of a
-scheduler.
+Everything that followed came from that. The agent looked for a scheduler,
+found none, and had to be told to disbelieve its own `ps`. It could not read
+supercronic's log, so it had to be told to redirect its own. It could not tell
+a dead scheduler from a live one, so a heartbeat job was added to prove
+liveness — evidence produced by the thing under test, written to a file the
+agent is invited to edit, where absence proves nothing at all. Three
+instructions, each patching a gap the split had opened.
+
+The first fix was to background it from the compose `command`, with `exec
+node` after it. That worked and was wrong in a smaller way: a backgrounded
+sibling never receives `SIGTERM`. Measured with two shells and a `docker stop
+-t 5`, only the `exec`'d one reported the signal, so supercronic would run
+through the whole grace period and then die by `SIGKILL` — losing the graceful
+shutdown that is one of supercronic's four stated reasons to exist. It also
+put the arrangement in a file each deployment copies, so a published image
+would only schedule for someone who copied the right `command:`.
+
+**Settled: `src/scheduler.js` spawns it.** The bot already knows how to shut
+down in order, and now the scheduler is part of that order. There is no
+`command:` in compose at all; `CRONTAB_FILE` — which the image sets, and which
+already decides whether the agent is *told* about scheduling — decides whether
+the child is started. One switch, so the instruction and the process cannot
+disagree, and a host deployment (where the variable is empty and a real cron
+exists) is untouched.
+
+Being the parent buys three things the other two arrangements could not:
+
+- **Supervision.** It restarts a scheduler that dies, and gives up after five
+  failures inside ten seconds with an error rather than spinning. `restart:
+  unless-stopped` could never have covered this, since PID 1 stays alive.
+- **One log.** supercronic's output is parsed for its level and re-emitted
+  through the bot's logger, tagged `cron`, instead of a second stream.
+- **A chosen environment.** This turned out to matter more than expected.
+  supercronic deliberately does *not* purge the environment before running a
+  job — that is one of its design goals, since a container's configuration
+  arrives that way — which was verified rather than assumed: a variable set on
+  the container reached the job unchanged, along with the full image `PATH`.
+  As a child of the bot, every scheduled command would therefore inherit
+  `MATRIX_PASSWORD` and `MATRIX_RECOVERY_KEY`. The sidecar was denied those by
+  leaving out `env_file`; here the child's environment is built from an
+  allowlist.
+
+  It was a denylist first — those two removed, the rest passed through — which
+  is the wrong way round, and aguegu said so. A denylist has to keep up with
+  every secret anyone later adds to `.env`, and the day it does not, nothing
+  says so; a job's whole output is a file that may well be posted to a room.
+  The allowlist is what a command needs to *work*: `PATH`, `HOME`, `TZ`,
+  `LANG`/`LC_ALL`, and this deployment's own directories, pi's included so a
+  job may run `pi` itself. A job needing anything more reads it from a file
+  (`. /data/cron.env && …`), which is the answer the agent already has for
+  everything else it wants to persist — no new switch, and visible in the
+  crontab line rather than in the deployment.
+
+`pgrep -a supercronic` answers the question the agent was already asking, and
+`ps` distinguishes a crash-loop from a clean boot. The heartbeat and
+`/data/cron-alive` are gone. Jobs are still told to redirect to
+`/data/cron.log`, because that is genuinely the agent's only way to read its
+own output — but that is one instruction rather than three, and it is about
+the job rather than about the scheduler.
+
+The instruction about a job's environment had to be corrected too: it said
+cron hands a job almost nothing, not even `PATH`. True of a traditional cron,
+false of this one, and the agent would have wasted turns working around a
+constraint that was not there.
 
 The concern about inotify turned out to be unfounded, which was worth checking
 rather than assuming: the agent may rewrite the crontab atomically (temp file,
@@ -232,11 +293,13 @@ But it had no way to know either, and checking and finding no daemon is better
 behaviour than trusting an instruction. The fix is evidence rather than firmer
 wording:
 
-- a **heartbeat** line in the default crontab refreshes `/data/cron-alive`, so
-  a recent timestamp proves the scheduler is alive and reading the file;
+- **`pgrep -a supercronic`**, which is what it tried to do unaided and was
+  told to stop doing. Moving the scheduler into this container made its
+  instinct correct instead of misleading;
 - jobs are told to end with `>> /data/cron.log 2>&1`, because supercronic's
-  own output goes to a container the agent cannot reach. Without that, a job
-  that runs and fails is indistinguishable from one that never ran.
+  own output goes to the container's stdout, which the agent cannot read from
+  inside. Without that, a job that runs and fails is indistinguishable from
+  one that never ran.
 
 The other caution stands: **cron hands jobs almost no environment** — no image
 `ENV`, minimal `PATH`. A job that works when you run it by hand can still fail

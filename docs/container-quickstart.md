@@ -219,6 +219,48 @@ of it. Two bots once compared notes, both found
 zero skills, and concluded they matched; one had `pi-web-access` and the other
 had nothing.
 
+## Scheduling
+
+Nothing to configure: the bot starts `supercronic` itself, because the image
+sets `CRONTAB_FILE=/data/crontab`. It seeds that file on the first run,
+restarts the scheduler if it dies, and stops it before its own shutdown.
+
+`data/crontab` is an ordinary five-field crontab on your bind mount. The agent
+edits it by being asked for something on a schedule; you can edit it in a text
+editor. Either way `-inotify` reloads it on save, including when it is
+replaced atomically, with nothing to restart.
+
+```sh
+cat data/crontab                          # the schedule, from the host
+docker compose exec bot pgrep -a supercronic   # what the agent checks too
+tail -f data/cron.log                     # what jobs printed, if they redirect
+```
+
+Jobs are told — in the `scheduling-crontab` section of `AGENTS.md` — to end
+with `>> /data/cron.log 2>&1`, because supercronic's own output goes to
+`docker compose logs bot` and the agent cannot read that from inside. A job
+has no room to speak into either: what it produces is a file in
+`data/inbox/` (a prompt that wakes the agent) or `data/outbox/` (finished text
+to post).
+
+**A job's environment is built, not inherited.** supercronic does not purge
+the environment before running a job — that is one of the reasons it exists —
+so as a child of the bot a job would otherwise get everything the bot has,
+`MATRIX_PASSWORD` and `MATRIX_RECOVERY_KEY` included. Instead it is handed
+`PATH`, `HOME`, `TZ`, `LANG`/`LC_ALL` and the deployment's own directories
+(`DATA_DIR`, `SESSION_DIR`, `BOT_CWD`, `INBOX_DIR`, `OUTBOX_DIR`,
+`CRONTAB_FILE`, `PI_AGENT_DIR`, `PI_CODING_AGENT_DIR`) — and nothing else.
+
+An allowlist rather than a denylist, so a secret nobody thought about is out
+by default. If a job needs a value, put it in a file and read it in the line:
+`. /data/cron.env && your-command`. Set `TZ` on the service if your schedules
+should not be UTC.
+
+If you do not want the bot scheduling anything, set `CRONTAB_FILE=` (empty) in
+`.env`. That turns off the scheduler *and* the paragraph in `AGENTS.md` that
+tells the agent it can schedule things, which is the point of the one switch:
+the two cannot disagree.
+
 ## When it goes wrong
 
 | What you see | What it is |
@@ -233,14 +275,10 @@ had nothing.
 | An installed extension does not appear in `.info` | `.reload` does not pick up a package installed after the process started. Restart the container |
 | `EROFS: read-only file system` from a `pi` command | Those commands lock `settings.json`; the data volume must be writable |
 | An edit to `data/pi/AGENTS.md` keeps disappearing | It is rewritten at every start. Edit the copy in `data/parts-enabled/` instead, or remove the managed marker to claim the file |
+| A scheduled job never runs, and `pgrep -a supercronic` finds nothing | The bot gave up restarting it after five failures in a row — `docker compose logs bot` says why, tagged `cron` |
+| `No supercronic on PATH` at startup | `CRONTAB_FILE` is set on an image that has no scheduler. Either unset it or use this image |
+| A job runs by hand but not on schedule | It is a crontab line, not a shell script: a bare `%` truncates the command there, and quoting can be mangled on the way in |
 | Two bots answering as the same account | Two containers on one `data/` volume. The instance lock stores a pid and cannot see across a PID namespace, so it will not catch this |
-
-## What is not here yet
-
-**Cron.** The bots schedule themselves on the host, and that does not survive
-containerizing as-is. The decision is made and written up in
-[containerization](containerization.md#the-decision-a-crontab-file-not-a-crontab)
-— a crontab file read by `supercronic` — but it is not built.
 
 ---
 

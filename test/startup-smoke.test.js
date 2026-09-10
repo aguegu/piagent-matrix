@@ -86,6 +86,9 @@ describe("the bot starts up", () => {
 
       // The startup-only side effects, which no unit test performs together.
       assert.ok(existsSync(join(data, "bot.lock")), "the instance lock is taken");
+      // Seeded by the scheduler, so a deployment always has a file to edit —
+      // even here, where supercronic is absent and startup only logs that.
+      assert.ok(existsSync(join(data, "crontab")), "the crontab exists to be edited");
       assert.deepEqual(
         readdirSync(join(data, "parts-enabled")).sort(),
         ["10-living-in-container.md", "20-scheduling-crontab.md"],

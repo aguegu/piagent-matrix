@@ -35,6 +35,7 @@ import { describeParts, enabledParts, installAgentResources, publishParts, seedE
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
+import { startScheduler } from "./scheduler.js";
 
 const matrix = config.get("matrix");
 const storagePaths = config.get("storage");
@@ -159,6 +160,8 @@ let stopOutbox = null;
 let stopInbox = null;
 /** Released on shutdown so the next start does not have to break a stale lock. */
 let releaseLock = null;
+/** supercronic, when this deployment schedules its own work; see scheduler.js. */
+let scheduler = null;
 /** @type {MainRoom | null} */
 let mainRoom = null;
 /** roomId -> whoever invited the bot, for invites seen this run. */
@@ -180,6 +183,13 @@ async function shutdown(signal) {
     stopInbox?.();
   } catch {
     /* ignore */
+  }
+  // Before the agent is disposed, so a job cannot start a run into a session
+  // that is being torn down.
+  try {
+    await scheduler?.stop();
+  } catch (err) {
+    LogService.warn("cron", `scheduler.stop: ${err?.message ?? err}`);
   }
   try {
     if (agentPromise) {
@@ -785,7 +795,6 @@ async function main() {
       OUTBOX_DIR: resolve(config.get("outbox.dir")),
       CRONTAB_FILE: crontabFile,
       CRON_LOG: crontabFile ? join(dirname(crontabFile), "cron.log") : "",
-      CRON_ALIVE: crontabFile ? join(dirname(crontabFile), "cron-alive") : "",
     }),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
@@ -797,6 +806,12 @@ async function main() {
     // the agent taking a user id apart correctly.
     BOT_NAME: userId.replace(/^@/, "").split(":")[0],
   });
+
+  // After the agent has been told how scheduling works here, so the two never
+  // disagree: no crontab configured means both the section and the child are
+  // absent, rather than one promising what the other does not provide.
+  scheduler = startScheduler({ crontabFile });
+  if (scheduler) LogService.info("cron", `Scheduler running as pid ${scheduler.pid}, reading ${crontabFile}.`);
 
   AutojoinRoomsMixin.setupOnClient(client);
 

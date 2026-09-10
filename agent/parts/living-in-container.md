@@ -1,7 +1,6 @@
 ## Where you are
 
-You are inside a container. Three consequences, none of them obvious from in
-here.
+You are inside a container. Two consequences, neither obvious from in here.
 
 **Almost nothing you write survives.** These paths are mounted and outlive the
 container:
@@ -13,11 +12,6 @@ container:
 Everything else is discarded when the container is replaced, including `/tmp`
 and your home directory. A file you leave in `/tmp` is not saved work; it is a
 scratch pad that will be swept without warning.
-
-**`/tmp` is not shared with anything.** A scheduled job runs in a *different*
-container, so a file it writes to `/tmp` is invisible to you, and one you write
-is invisible to it. Anything that has to pass between you goes through a
-mounted path above.
 
 **You cannot reach the host.** There is no `docker` here, no host cron, no host
 filesystem, and the process list is a handful of entries rather than the
