@@ -763,13 +763,17 @@ async function main() {
   // data/token.json, and the agent should not be the last to know.
   const userId = await client.getUserId().catch(() => matrix.userId);
   const crontabFile = config.get("agent.crontabFile");
+
+  // Available, then enabled — both on the data volume so an operator running
+  // an image they did not build can read what they are turning on. The seed
+  // runs once; after that parts-enabled is theirs, and an empty one means
+  // everything is off rather than that something needs repairing.
+  const availableDir = resolve(storagePaths.dataDir, "parts");
+  const enabledDir = resolve(storagePaths.dataDir, "parts-enabled");
+  publishParts(availableDir);
+  seedEnabled(enabledDir, availableDir, config.get("agent.parts"));
+
   installAgentResources(resolve(config.get("agent.agentDir")), {
-    // Deployment-specific sections live in agent/parts/ and are pulled in
-    // where they apply. A host with a real cron gets nothing here, because
-    // the agent already knows how to drive `crontab`.
-    // Available is not enabled: agent/parts/ holds every optional section,
-    // and AGENT_PARTS says which this deployment uses, in order. One bag of
-    // values serves them all — a part takes what it needs.
     // Whatever is linked in parts-enabled, in the order it sorts. One bag of
     // values serves them all — a part takes what it needs.
     PARTS: enabledParts(enabledDir, {

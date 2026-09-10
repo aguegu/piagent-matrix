@@ -18,8 +18,8 @@
 // naming a path has to name an absolute one, and that path differs per host.
 // `{{DATA_DIR}}` and friends are substituted as the file is written.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LogService } from "matrix-bot-sdk";
 
@@ -47,10 +47,10 @@ export function renderPart(name, vars = {}) {
 /**
  * Publish the shipped parts where an operator can see and edit them.
  *
- * Available has to be visible. A symlink into the image is no use to someone
- * running a published one — they cannot read what they are enabling, let
- * alone copy it — so the shipped sections are written onto the data volume
- * beside any of their own.
+ * Available has to be visible. Sections sealed inside the image are no use
+ * to someone running one they did not build — they cannot read what they are
+ * enabling, let alone copy it — so the shipped ones are written onto the data
+ * volume beside any of their own.
  *
  * Each carries the managed marker, and a file without it is left alone: the
  * same bargain AGENTS.md makes. Edit one of ours and it stops being ours.
@@ -74,8 +74,8 @@ export function publishParts(dir, from = PARTS) {
  * The enabled parts, in directory order, as one block.
  *
  * Enabling is a filesystem act, as in nginx: everything available lives in
- * one directory, and a link in `parts-enabled/` turns one on. Order is the
- * order the names sort in, which is why the seeded links carry a numeric
+ * one directory, and a copy in `parts-enabled/` turns one on. Order is the
+ * order the names sort in, which is why the seeded copies carry a numeric
  * prefix — `10-`, `20-` — leaving room to insert between them.
  *
  * An entry that resolves to nothing is logged rather than thrown, loudly: a
@@ -115,22 +115,28 @@ export function enabledParts(enabledDir, vars = {}) {
 }
 
 /**
- * Turn on the named parts, once, by linking them — and never again.
+ * Turn on the named parts, once, by copying them — and never again.
  *
- * A deployment says what a fresh install should start with; after that the
- * directory is the operator's, and an empty one means they turned everything
- * off, which is a choice rather than a mistake to correct on every boot.
+ * Copies rather than links. A link is cleverer and buys nothing here: the
+ * same directory is read from the host and from inside a container, and a
+ * copy is a file either way, on any filesystem, with nothing to dangle. It
+ * also makes the enabled text the operator's outright — edit it in place, and
+ * `parts/` still holds the shipped version to compare against or copy back.
  *
- * The links are relative so they resolve the same read from the host as from
- * inside the container, which an absolute path into either would not.
+ * A deployment says what a fresh install starts with; after that the
+ * directory is theirs, and an empty one means everything is off, which is a
+ * choice rather than a mistake to correct on every boot.
  */
 export function seedEnabled(enabledDir, availableDir, names = []) {
   if (existsSync(enabledDir)) return false;
   mkdirSync(enabledDir, { recursive: true });
   names.forEach((name, i) => {
-    const link = join(enabledDir, `${(i + 1) * 10}-${name}.md`);
     try {
-      symlinkSync(join(relative(enabledDir, availableDir), `${name}.md`), link);
+      let text = readFileSync(join(availableDir, `${name}.md`), "utf8");
+      // The marker says "the bot rewrites this". Nothing rewrites a copy in
+      // here, so carrying it over would be a lie about who owns the file.
+      if (text.startsWith(MANAGED)) text = text.slice(MANAGED.length).replace(/^\s*\n/, "");
+      writeFileSync(join(enabledDir, `${(i + 1) * 10}-${name}.md`), text);
     } catch (err) {
       LogService.warn("resources", `could not enable ${name}: ${err?.message ?? err}`);
     }

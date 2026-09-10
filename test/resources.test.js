@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it, beforeEach, afterEach } from "node:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MANAGED, PARTS, SHIPPED, enabledParts, fillTemplate, installAgentResources, publishParts, renderPart, seedEnabled } from "../src/resources.js";
@@ -238,43 +238,58 @@ describe("available parts, and which are enabled", () => {
     assert.equal(enabledParts(enabled, vars), "", "nor is an empty one");
   });
 
-  it("seeds once, with relative links, and never again", () => {
+  it("seeds once, as copies, and never again", () => {
     publishParts(avail);
     assert.equal(seedEnabled(enabled, avail, ["living-in-container"]), true);
+    const seeded = join(enabled, "10-living-in-container.md");
     assert.deepEqual(readdirSync(enabled), ["10-living-in-container.md"]);
-    assert.ok(readlinkSync(join(enabled, "10-living-in-container.md")).startsWith(".."),
-      "relative, so it resolves the same from the host and inside the container");
+    assert.ok(!lstatSync(seeded).isSymbolicLink(), "a copy, not a link — same file on either side of the mount");
+    assert.ok(!readFileSync(seeded, "utf8").startsWith(MANAGED),
+      "and not marked as ours, because nothing here rewrites it");
 
-    rmSync(join(enabled, "10-living-in-container.md"));
+    rmSync(seeded);
     assert.equal(seedEnabled(enabled, avail, ["living-in-container"]), false, "seeding is once");
     assert.deepEqual(readdirSync(enabled), [], "an empty directory is a choice, not a mistake to fix");
   });
 
-  it("renders in the order the links sort, not the order they were made", () => {
+  it("keeps an edited copy, and leaves the original to compare against", () => {
+    publishParts(avail);
+    seedEnabled(enabled, avail, ["living-in-container"]);
+    const mine = join(enabled, "10-living-in-container.md");
+    writeFileSync(mine, "## Where you are\n\nSomewhere of my own choosing.\n");
+
+    publishParts(avail);
+    seedEnabled(enabled, avail, ["living-in-container"]);
+
+    assert.match(enabledParts(enabled, vars), /my own choosing/, "the edit survives a restart");
+    assert.match(readFileSync(join(avail, "living-in-container.md"), "utf8"), /not shared with anything/,
+      "and the shipped text is still there to copy back");
+  });
+
+  it("renders in the order the names sort, not the order they were made", () => {
     publishParts(avail);
     mkdirSync(enabled);
-    symlinkSync("../parts/scheduling-crontab.md", join(enabled, "10-scheduling.md"));
-    symlinkSync("../parts/living-in-container.md", join(enabled, "20-where.md"));
+    writeFileSync(join(enabled, "20-where.md"), readFileSync(join(avail, "living-in-container.md"), "utf8"));
+    writeFileSync(join(enabled, "10-scheduling.md"), readFileSync(join(avail, "scheduling-crontab.md"), "utf8"));
     const out = enabledParts(enabled, vars);
     assert.ok(out.indexOf("## Scheduling") < out.indexOf("## Where you are"), "10- before 20-");
     assert.doesNotMatch(out, /\{\{/, "nothing reaches the agent unresolved");
     assert.doesNotMatch(out, /managed by/, "and the marker is ours, not the agent's to read");
   });
 
-  it("keeps going past a link that leads nowhere", () => {
+  it("keeps going past an entry it cannot read", () => {
     publishParts(avail);
     mkdirSync(enabled);
-    symlinkSync("../parts/living-in-container.md", join(enabled, "10-where.md"));
-    symlinkSync("../parts/deleted.md", join(enabled, "20-gone.md"));
-    const out = enabledParts(enabled, vars);
-    assert.match(out, /## Where you are/, "the rest still renders");
+    writeFileSync(join(enabled, "10-where.md"), readFileSync(join(avail, "living-in-container.md"), "utf8"));
+    mkdirSync(join(enabled, "20-oops.md")); // a directory where a file should be
+    assert.match(enabledParts(enabled, vars), /## Where you are/, "the rest still renders");
   });
 
   it("takes an operator's own part, enabled the same way", () => {
     publishParts(avail);
     writeFileSync(join(avail, "house-style.md"), "## House style\n\nBe brief in {{BOT_CWD}}.\n");
     mkdirSync(enabled);
-    symlinkSync("../parts/house-style.md", join(enabled, "10-house.md"));
+    writeFileSync(join(enabled, "10-house.md"), readFileSync(join(avail, "house-style.md"), "utf8"));
     assert.match(enabledParts(enabled, vars), /Be brief in \/workspace/);
   });
 });

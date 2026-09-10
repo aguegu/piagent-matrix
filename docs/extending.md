@@ -69,22 +69,24 @@ empty where it does not.
 $DATA_DIR/parts/            available. The shipped sections are published here
                             on every start, so you can read what you are
                             enabling, and yours sit beside them
-$DATA_DIR/parts-enabled/    enabled. A link here turns one on; order is how
+$DATA_DIR/parts-enabled/    enabled. A copy here turns one on; order is how
                             the names sort, hence the 10-, 20- prefixes
 ```
 
 ```
 data/parts-enabled/
-  10-living-in-container.md -> ../parts/living-in-container.md
-  20-scheduling-crontab.md  -> ../parts/scheduling-crontab.md
+  10-living-in-container.md
+  20-scheduling-crontab.md
 ```
 
-Turning one off is `rm` on the link. The file it points at stays. Reordering
-is renaming a prefix. Nothing needs a rebuild, and nothing needs a variable.
+Copies, not links. A link would be cleverer and buy nothing: the directory is
+read from the host and from inside the container, and a copy is a file either
+way, on any filesystem, with nothing to dangle.
 
-The links are **relative** on purpose: `../parts/x.md` resolves the same read
-from the host as from inside the container, which an absolute path into
-either would not.
+Turning one off is `rm`. Reordering is renaming a prefix. Editing is editing —
+the enabled copy is yours outright, and `parts/` keeps the shipped version to
+compare against or copy back if you want ours again. Nothing needs a rebuild,
+and nothing needs a variable.
 
 `AGENT_PARTS` only seeds a **fresh** install — the first start creates
 `parts-enabled/` with those links, and never touches it again. An empty
