@@ -19,9 +19,15 @@ FROM node:24-bookworm-slim
 # run it unless their daemon is running, which is the failure mode this
 # project has spent two releases removing. Scheduling is a decision of its
 # own — see docs/containerization.md.
+#
+# wget is the exception to the counting: zero uses against curl's 2174. It is
+# here because a container is a sandbox rather than a host — a tool it reaches
+# for and does not find costs it a turn, and the blast radius of one more
+# fetcher inside the boundary is nil. That reasoning does not extend to the
+# host deployment, which has the whole machine.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       bash ca-certificates curl git jq procps python3 ripgrep \
+       bash ca-certificates curl git jq procps python3 ripgrep wget \
   && rm -rf /var/lib/apt/lists/*
 
 # supercronic: cron built for containers — one foreground process, jobs logged
