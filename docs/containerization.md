@@ -143,12 +143,27 @@ trading-tick, trading-digest   workspace dir → inbox
 weather-cron                   curl → inbox
 ```
 
-**Jobs that report on the host are not this bot's job any more.**
-`hourly-stats.sh` runs `df` and `free`; inside a container those describe the
-container, so it would keep working while reporting the wrong machine. The
-tempting fix — leave it on host cron and mount the inbox through — puts a hole
-in the boundary for the sake of one report. Host monitoring belongs to the
-host, by some route that is not the agent's sandbox.
+**A job that needs the host is not this bot's job any more** — but which
+jobs those are is less obvious than it looks, and worth measuring rather than
+assuming. Compared on this host:
+
+```
+memory     host 4015676 kB  ==  container 4015676 kB   (/proc/meminfo is not namespaced)
+disk /     host 62G         ==  container 62G          (overlay on the same disk)
+processes  host 161         !=  container 4            (this one is namespaced)
+```
+
+So `free` and `df /` report the *host's* figures from inside a container, and
+a memory report would be right. What is not available is anything namespaced
+or absent: the process list is four entries, and there is no `docker`, no host
+cron, no host filesystem. `hourly-stats.sh` began life running `docker ps`
+stats, which simply cannot work in here.
+
+That makes the failure mixed rather than clean — half the report correct, half
+missing — which is worse than a job that plainly cannot run. Host monitoring
+belongs to the host, by some route that is not the agent's sandbox, and the
+tempting fix of mounting the inbox through puts a hole in the boundary for the
+sake of one report.
 
 That is the split: **by what a job needs to see**, and a job that needs to see
 the host does not belong in here.
