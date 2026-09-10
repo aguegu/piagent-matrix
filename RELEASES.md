@@ -32,6 +32,10 @@ not — that reports the turn, not the total. And a spool file is now left alone
 until its writer has stopped touching it, after an agent spent two days
 building digests directly on their final path and one was read halfway.
 
+### Tests
+
+* **A startup smoke test**, because nothing else runs `main()`. A `ReferenceError` in it shipped past `node --check` and a green suite today, and the bot crash-looped on every restart while both still reported success. This boots the real entry point against a throwaway `DATA_DIR`, a fabricated token so no login is attempted and an unresolvable homeserver so nothing real is touched, then waits for the one artefact proving startup got past configuration, the instance lock, the crypto store and resource installation: the agent's own context file, with its sections spliced in and no placeholders left. It also checks the lock was taken and a fresh deployment seeded. The process dying moments later at its first sync is expected and not the subject — the artefacts are the evidence, not survival. 2 seconds, and verified against the actual regression it exists for
+
 ### Fixes
 
 * **A file still being written could be claimed and read half-finished.** Writers are asked to build the file elsewhere and `rename()` it in, which makes a file in the spool complete by definition — but nothing enforces that, and it was broken: the agent spent two days writing digests directly onto their final path in the outbox, and one was claimed mid-write, failed to parse as JSON, and was parked. All three parked files were valid JSON by the time anyone looked, which is the fingerprint — the claim is a hard link, so the writer's remaining bytes went into the very file that had already been read short. A `.txt` would have been worse: a truncated message posted with no error at all. Files are now passed over until they have been untouched for `settleMs` (1s by default, configurable per spool), and a pass that defers something comes back for it rather than waiting for the next poll. It costs a well-behaved writer nothing: an mtime set while the file was staged elsewhere is already past the window when it is moved in
