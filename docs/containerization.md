@@ -91,23 +91,51 @@ at all — so this costs nothing.
 
 That is the split: **by what a job needs to see**, not by convenience.
 
-For the jobs that live inside, three options:
+### The decision: a crontab file, not a crontab
 
-1. **A cron daemon in the container.** The only one that keeps `crontab -e`
-   working, so the agent goes on scheduling itself. Costs a second process, so
-   the image needs an init and a supervisor (`tini` plus a wrapper, or s6), and
-   `/var/spool/cron/crontabs` has to be a volume or the agent's edits die with
-   the container. Cron also hands jobs a bare environment — no image `ENV`,
-   minimal `PATH` — which is the kind of thing that fails silently.
-2. **`supercronic`.** One process, logs to stdout, built for containers. It
-   reads a crontab *file*, so `crontab -e` semantics go away and the agent would
-   edit a file instead. Whether it reloads on change needs checking before
-   committing to it.
-3. **Host cron only.** Works today unchanged, since the spool is already the
-   boundary. But the agent cannot edit the host's crontab from inside, and
-   bridging that back — a host watcher applying a crontab the container writes —
-   hands the container arbitrary host command execution. The isolation would be
-   theatre.
+The schedule is **a file in a volume**, read by
+[`supercronic`](https://github.com/aptible/supercronic), which exists for this
+job: one foreground process, jobs logged to stdout, no root, and `-inotify` to
+"start a watch on the crontab file, reloading it on changes". `SIGUSR2` forces a
+reload if the watch ever misses one.
+
+A file suits the agent better than `crontab -e` did. Editing a file is what its
+`write` and `edit` tools already do; driving an interactive `crontab` session
+never was. And persistence stops being a question about `/var/spool` ownership
+and becomes one mounted path.
+
+The rejected alternatives, for the record:
+
+- **A real cron daemon inside.** Keeps `crontab -e`, but costs a second process
+  needing an init and a supervisor, and `/var/spool/cron/crontabs` has to be
+  mounted with the right ownership before an edit survives a recreate.
+- **Host cron only.** Works today unchanged, since the spool is already the
+  boundary — but the agent cannot edit the host's crontab from inside, and
+  bridging that back (a host watcher applying a crontab the container writes)
+  hands the container arbitrary host command execution. The isolation would be
+  theatre.
+
+### Still open: one container or two
+
+`supercronic` is a separate process either way. It can run beside the bot under
+an init, or in its own container sharing the volumes.
+
+A sidecar is the better fit for a reason specific to this project: **the spool
+is already the interface between "something that schedules" and "the bot".**
+A cron container that mounts `inbox/` and the workspace needs no other contact
+with the bot at all — no supervisor, no shared lifecycle, one process each.
+That is the same boundary the outbox was built around in 0.2.0.
+
+Two things to test before committing to it:
+
+- **inotify across the mount.** The agent writes the crontab from the bot
+  container; supercronic watches it from another. Both are the same host
+  directory, so events should propagate — but if the agent writes atomically
+  (temp file, then rename) the watch follows the old inode and may go deaf.
+  `SIGUSR2`, or editing in place, is the fallback.
+- **A bare environment.** Cron hands jobs almost no environment — no image
+  `ENV`, minimal `PATH`. The `%` incident is a reminder of how quietly a
+  crontab can be wrong.
 
 ## Known limits
 
