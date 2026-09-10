@@ -73,16 +73,17 @@ like a dependency; `ca-certificates` is what lets the bot reach a homeserver
 over TLS.
 
 ```
-bash ca-certificates curl git jq procps python3 ripgrep wget
+bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep wget
 ```
 
-**`wget` is the exception, and worth naming as one.** Zero uses against curl's
-2174, so counting says leave it out. It is in because a container is a sandbox
-rather than a host: a tool the agent reaches for and does not find costs it a
-turn, and one more fetcher inside a boundary that is already drawn costs
-nothing. That argument is about the sandbox, not about the tool — it does not
-license adding whatever a normal image happens to have, and it does not
-transfer to the host deployment, which has the whole machine.
+**Two are exceptions, and worth naming as such.** `wget` has zero uses
+against curl's 2174; `bsdextrautils` (`column`) has one. Counting says leave
+both out. They are in because a container is a sandbox rather than a host: a
+tool the agent reaches for and does not find costs it a turn, and the blast
+radius inside a boundary already drawn is nil. That argument is about the
+sandbox, not about the tools — it does not license adding whatever a normal
+image happens to have, and it does not transfer to the host deployment, which
+has the whole machine.
 
 The counting is what caught curl, jq and python3 missing in the first place,
 so the default stays: **add on evidence, and record the exceptions as
@@ -92,8 +93,11 @@ exceptions.** To check what the agent actually runs before adding something:
 grep -ho '"command": *"[^"]*"' sessions/*/*.jsonl | ...   # or the one-liner in git log
 ```
 
-Still absent for want of evidence: `column` (one use), and `nc`, `dig`,
-`ping`, `unzip`, `ssh`, `make` — none of which appear at all.
+Still absent, with no uses at all: `nc`, `dig`, `ping`, `unzip`, `ssh`,
+`make`, `less`, `vim`. Absence is a loud failure — `command not found`, and
+the agent falls back, as it did from `at` to `crontab` to `nohup`. That is a
+lost turn, not a wrong answer, which is why the bar is evidence rather than
+completeness.
 
 **`at` and `cron` are deliberately absent.** Both accept work and silently
 never run it unless their daemon is running — the failure mode two releases

@@ -20,14 +20,15 @@ FROM node:24-bookworm-slim
 # project has spent two releases removing. Scheduling is a decision of its
 # own — see docs/containerization.md.
 #
-# wget is the exception to the counting: zero uses against curl's 2174. It is
-# here because a container is a sandbox rather than a host — a tool it reaches
-# for and does not find costs it a turn, and the blast radius of one more
-# fetcher inside the boundary is nil. That reasoning does not extend to the
+# wget and bsdextrautils (`column`) are the exceptions to the counting: zero
+# and one use respectively. They are here because a container is a sandbox
+# rather than a host — a tool the agent reaches for and does not find costs it
+# a turn, and the blast radius inside a boundary already drawn is nil. That
+# reasoning is about the sandbox, not the tools, and does not extend to the
 # host deployment, which has the whole machine.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       bash ca-certificates curl git jq procps python3 ripgrep wget \
+       bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep wget \
   && rm -rf /var/lib/apt/lists/*
 
 # supercronic: cron built for containers — one foreground process, jobs logged
