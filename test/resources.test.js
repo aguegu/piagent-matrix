@@ -3,7 +3,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MANAGED, PARTS, SHIPPED, enabledParts, fillTemplate, installAgentResources, publishParts, renderPart, seedEnabled } from "../src/resources.js";
+import { MANAGED, PARTS, SHIPPED, enabledParts, fillTemplate, installAgentResources, publishParts, seedEnabled } from "../src/resources.js";
 
 describe("filling a template", () => {
   it("substitutes what it knows", () => {
@@ -146,21 +146,6 @@ describe("optional sections of AGENTS.md", () => {
   // strings in a JS array with escaped backticks, which is a poor place to
   // edit an instruction that has already been rewritten twice.
 
-  it("fills a part's own placeholders, which the main pass cannot", () => {
-    // fillTemplate is a single replace, so a {{...}} arriving inside a
-    // substituted value would reach the agent as written.
-    const out = renderPart("scheduling-crontab", {
-      CRONTAB_FILE: "/data/crontab",
-      CRON_LOG: "/data/cron.log",
-      CRON_ALIVE: "/data/cron-alive",
-      INBOX_DIR: "/data/inbox",
-      OUTBOX_DIR: "/data/outbox",
-    });
-    assert.doesNotMatch(out, /\{\{/, "no placeholder survives into the agent's copy");
-    for (const v of ["/data/crontab", "/data/cron-alive", "/data/cron.log", "/data/inbox"]) {
-      assert.ok(out.includes(v), `${v} is named`);
-    }
-  });
 
   it("supplies every placeholder each shipped part uses", () => {
     // The same guard AGENTS.md has, for the parts beside it.

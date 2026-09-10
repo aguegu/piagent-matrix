@@ -34,17 +34,6 @@ export const SHIPPED = fileURLToPath(new URL("../agent", import.meta.url));
 export const PARTS = fileURLToPath(new URL("../agent/parts", import.meta.url));
 
 /**
- * One optional section, filled in and ready to substitute into AGENTS.md.
- *
- * Filling here rather than letting the caller pass it through raw is what
- * makes a part's own `{{...}}` work: the main pass is a single replace, so a
- * placeholder arriving inside a substituted value would be left as written.
- */
-export function renderPart(name, vars = {}) {
-  return fillTemplate(readFileSync(join(PARTS, `${name}.md`), "utf8"), vars);
-}
-
-/**
  * Publish the shipped parts where an operator can see and edit them.
  *
  * Available has to be visible. Sections sealed inside the image are no use
