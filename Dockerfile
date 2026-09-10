@@ -40,7 +40,15 @@ COPY . .
 # /sessions is kept apart on purpose: it is large and churning where /data is
 # small and precious, and losing it costs memory rather than identity. That is
 # a different backup policy, so it gets a different volume.
+#
+# PI_AGENT_DIR is spelled out rather than left to default. It already resolves
+# to ${DATA_DIR}/pi through a `||` in config/default.js, and the bot then sets
+# pi's own PI_CODING_AGENT_DIR from it — four steps and two confusable names to
+# arrive somewhere this file never mentions. Wrong, pi falls back to ~/.pi,
+# which here is an unmounted path: the provider credentials would vanish on
+# restart and the bot would ask to be logged in again.
 ENV DATA_DIR=/data \
+    PI_AGENT_DIR=/data/pi \
     SESSION_DIR=/sessions \
     INBOX_DIR=/data/inbox \
     OUTBOX_DIR=/data/outbox \

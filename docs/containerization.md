@@ -75,9 +75,14 @@ Losing any of these is not "losing a cache".
 | the agent's workspace | `BOT_CWD` | Whatever the agent has been building |
 | the crontab file | — | The agent's own schedule. A plain file, deliberately: see below. It lives in `data/` too |
 
-`PI_AGENT_DIR` defaults inside `DATA_DIR`, so it is covered — but it holds
-provider credentials, which is worth knowing before mounting `data/` anywhere
-convenient.
+`PI_AGENT_DIR` would default inside `DATA_DIR` on its own, but the image sets
+it explicitly. Left implicit it arrives at `/data/pi` through a `||` in
+`config/default.js` and a constructor that sets pi's own
+`PI_CODING_AGENT_DIR` from it — two similarly named variables and four steps,
+none of them visible in the Dockerfile. Got wrong, pi falls back to `~/.pi`,
+which in a container is an unmounted path: provider credentials would disappear
+on every restart. It also holds those credentials, which is worth knowing
+before mounting `data/` somewhere convenient.
 
 Two volumes, split by lifetime rather than by kind. `data/` is small, precious
 and unregenerable; `sessions/` is large and churning, and losing it costs
