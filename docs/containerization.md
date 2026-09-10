@@ -179,6 +179,26 @@ Both edit styles reload:
 
 `SIGUSR2` remains the manual fallback.
 
+### Telling the agent, and letting it check
+
+The agent cannot see any of this from its own container, and it does look.
+Given the first version of the instruction — which said a job would be picked
+up, without saying by what — it wrote the crontab correctly, then reported:
+
+> There's a crontab entry in /data/crontab, but no cron daemon is running — so
+> it's registered but won't execute.
+
+It was wrong: the job ran on schedule, and failed on its own `awk` quoting.
+But it had no way to know either, and checking and finding no daemon is better
+behaviour than trusting an instruction. The fix is evidence rather than firmer
+wording:
+
+- a **heartbeat** line in the default crontab refreshes `/data/cron-alive`, so
+  a recent timestamp proves the scheduler is alive and reading the file;
+- jobs are told to end with `>> /data/cron.log 2>&1`, because supercronic's
+  own output goes to a container the agent cannot reach. Without that, a job
+  that runs and fails is indistinguishable from one that never ran.
+
 The other caution stands: **cron hands jobs almost no environment** — no image
 `ENV`, minimal `PATH`. A job that works when you run it by hand can still fail
 under the scheduler, and the `%` incident is a reminder of how quietly a

@@ -619,18 +619,32 @@ function describeSessionReport(stats) {
  */
 function describeScheduling({ crontabFile, inbox, outbox }) {
   if (!crontabFile) return "";
+  const log = `${dirname(crontabFile)}/cron.log`;
+  const alive = `${dirname(crontabFile)}/cron-alive`;
   return [
     "## Scheduling something to repeat",
     "",
     "There is no cron daemon here and no `crontab` command. The schedule is a",
     `file: \`${crontabFile}\`. Add a line in the ordinary five-field format and`,
-    "save it — something watches the file and picks the change up at once, so",
-    "there is nothing to restart and nothing to reload.",
+    "save it — the change is picked up at once, with nothing to restart.",
     "",
-    "**A job does not run where you do.** It runs in a separate container that",
-    "has the workspace and the spools and nothing else: no Matrix, no host, and",
+    "**The scheduler is in another container**, so looking for it here finds",
+    "nothing: no `cron` in `ps`, no `crontab`, no `at`. That is expected and",
+    "does not mean your job will not run. Do not conclude from a missing daemon",
+    "that scheduling is broken — check instead:",
+    "",
+    `- \`${alive}\` is refreshed by a heartbeat job. A timestamp within the last`,
+    "  few minutes means the scheduler is alive and reading the file.",
+    `- End each of your own lines with \`>> ${log} 2>&1\` and read that file.`,
+    "  It is the only way you can see whether a job ran and what it said — the",
+    "  scheduler's own log goes somewhere you cannot reach.",
+    "",
+    "**A job does not run where you do.** It runs in that other container, with",
+    "the workspace and the spools and nothing else: no Matrix, no host, and",
     "almost no environment — not your `PATH`, not your shell's variables. Use",
-    "absolute paths, and run the command yourself first to see it work.",
+    "absolute paths. Run the command yourself first: quoting that survives your",
+    "shell can still be mangled on its way into a crontab line, and the failure",
+    "is silent unless you are logging.",
     "",
     "**A job cannot speak.** It has no room to speak into, so what it produces",
     `is a file: a prompt in \`${inbox}\` to wake you, or finished text in`,
