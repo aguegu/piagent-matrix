@@ -56,7 +56,7 @@ every room, once you `.reload` (or restart).
 
 ## Sections that depend on the deployment
 
-`agent/AGENTS.md` is the same for every bot, because almost everything in it
+`agent/AGENTS.template.md` is the same for every bot, because almost everything in it
 is a fact about this harness rather than about a machine. Where a fact
 genuinely differs, the difference is a **part**: a markdown file in
 `agent/parts/`, pulled into a `{{PLACEHOLDER}}` where it applies and left

@@ -184,7 +184,7 @@ src/resources.js        installs agent/ into PI_AGENT_DIR on start
 src/version.js          which build this is, for .info and the startup log
 src/loop-guard.js       bounds a run of bots answering bots
 src/status.js           typing indicator (+ an unused edit-in-place helper)
-agent/AGENTS.md         standing instructions that ship with the bot
+agent/AGENTS.template.md  the standing instructions, before substitution
 scripts/cross-sign.js   provisioning, matrix-js-sdk only
 docs/                   the longer form; see Documentation below
 test/                   node:test suites

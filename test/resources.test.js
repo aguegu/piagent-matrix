@@ -34,14 +34,14 @@ describe("installing the bot's standing instructions", () => {
   });
 
   const target = () => join(agentDir, "AGENTS.md");
-  const ship = (body) => writeFileSync(join(from, "AGENTS.md"), body);
+  const ship = (body) => writeFileSync(join(from, "AGENTS.template.md"), body);
 
   it("writes it with this host's paths filled in, and marks it as managed", () => {
     ship("read {{DATA_DIR}}/main-room.json");
 
     const r = installAgentResources(agentDir, { DATA_DIR: "/srv/bot/data" }, from);
 
-    assert.deepEqual(r.written, ["AGENTS.md"]);
+    assert.deepEqual(r.written, ["AGENTS.template.md"], "reported by its source name");
     const written = readFileSync(target(), "utf8");
     assert.ok(written.startsWith(MANAGED), "the marker is what makes it ours to rewrite");
     assert.match(written, /read \/srv\/bot\/data\/main-room\.json/);
@@ -52,7 +52,7 @@ describe("installing the bot's standing instructions", () => {
     ship("same");
     installAgentResources(agentDir, {}, from);
     assert.deepEqual(installAgentResources(agentDir, {}, from),
-      { written: [], skipped: ["AGENTS.md"], kept: [], unresolved: [] });
+      { written: [], skipped: ["AGENTS.template.md"], kept: [], unresolved: [] });
   });
 
   it("overwrites its own copy, since the repo is the source", () => {
@@ -60,7 +60,7 @@ describe("installing the bot's standing instructions", () => {
     installAgentResources(agentDir, {}, from);
     writeFileSync(target(), `${MANAGED}\n\nhand-edited on this host`);
 
-    assert.deepEqual(installAgentResources(agentDir, {}, from).written, ["AGENTS.md"]);
+    assert.deepEqual(installAgentResources(agentDir, {}, from).written, ["AGENTS.template.md"]);
     assert.match(readFileSync(target(), "utf8"), /shipped/);
   });
 
@@ -72,7 +72,7 @@ describe("installing the bot's standing instructions", () => {
 
     const r = installAgentResources(agentDir, {}, from);
 
-    assert.deepEqual(r, { written: [], skipped: [], kept: ["AGENTS.md"], unresolved: [] });
+    assert.deepEqual(r, { written: [], skipped: [], kept: ["AGENTS.template.md"], unresolved: [] });
     assert.equal(readFileSync(target(), "utf8"), "# my own instructions");
   });
 
@@ -100,7 +100,7 @@ describe("installing the bot's standing instructions", () => {
 
   it("ships an AGENTS.md whose placeholders are all supplied at startup", () => {
     // Guards the pairing between agent/*.md and the values index.js passes.
-    const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
+    const shipped = readFileSync(join(SHIPPED, "AGENTS.template.md"), "utf8");
     const used = [...new Set([...shipped.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].sort();
     // Sorted, so the two section placeholders land where the alphabet puts
     // them rather than where they read.
@@ -111,8 +111,24 @@ describe("installing the bot's standing instructions", () => {
     ]);
   });
 
+  it("installs the template under the name pi actually reads", () => {
+    // The source is AGENTS.template.md so nobody has to wonder which of two
+    // AGENTS.md is the real one; pi only reads AGENTS.md, so the suffix has
+    // to come off on the way in.
+    const dir = mkdtempSync(join(tmpdir(), "agentdir-"));
+    try {
+      installAgentResources(dir, {
+        DATA_DIR: "/data", BOT_CWD: "/w", OUTBOX_DIR: "/o", INBOX_DIR: "/i",
+        MATRIX_USER_ID: "@b:example.org", BOT_NAME: "b", PARTS: "",
+      });
+      assert.deepEqual(readdirSync(dir), ["AGENTS.md"], "no .template survives into the agent's directory");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("ships an AGENTS.md that tells the agent where its record is", () => {
-    const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
+    const shipped = readFileSync(join(SHIPPED, "AGENTS.template.md"), "utf8");
     assert.match(shipped, /\{\{DATA_DIR\}\}\/main-room\.json/, "asked to read the record, not told");
     assert.doesNotMatch(shipped, /token\.json`[^)]*read/, "and warned off the credentials beside it");
   });

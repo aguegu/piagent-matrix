@@ -181,7 +181,11 @@ export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
 
   const target = resolve(agentDir);
   for (const file of shipped) {
-    const path = join(target, file);
+    // `AGENTS.template.md` installs as `AGENTS.md`. The suffix is there so a
+    // reader can tell the two apart at a glance: the shipped one is full of
+    // {{placeholders}} and would be nonsense to an agent, and the question
+    // "which of these two AGENTS.md is the real one" should not need asking.
+    const path = join(target, file.replace(/\.template\.md$/, ".md"));
     try {
       const body = fillTemplate(readFileSync(join(from, file), "utf8"), vars).replace(/^\s+/, "");
       // An unsubstituted placeholder reaches the agent verbatim and reads as a
@@ -202,7 +206,7 @@ export function installAgentResources(agentDir, vars = {}, from = SHIPPED) {
         kept.push(file);
         LogService.warn(
           "bot",
-          `${path} was not written by this bot, so it is left alone — and the bot's own ${file} ` +
+          `${path} was not written by this bot, so it is left alone — and the bot's own copy ` +
             "is therefore not installed, because pi reads only one context file per directory. " +
             "The bot then does not know what it is. Move those instructions to " +
             "$BOT_CWD/AGENTS.md, which pi loads as well, and delete this file.",
