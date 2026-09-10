@@ -1,6 +1,13 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import dotenvFlow from "dotenv-flow";
-dotenvFlow.config();
+
+// Resolved from this file, not from the working directory. dotenv-flow's
+// default is `process.cwd()`, which made "start it from the repo root" a rule
+// people had to know — and, in a container whose working directory is the
+// agent's workspace rather than the app, an .env that silently never loads.
+// The template lives beside the code, so look for it there.
+dotenvFlow.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "..") });
 
 const dataDir = process.env.DATA_DIR || "./data";
 

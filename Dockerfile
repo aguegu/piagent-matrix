@@ -56,8 +56,15 @@ ENV DATA_DIR=/data \
 RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
   && chown -R node:node /data /sessions /workspace
 
+# The app lives in /app; the agent lives in /workspace, and that is where a
+# shell should start. `npx pi` run in here would otherwise land in /app and ask
+# to trust the bot's own source tree. node-config resolves its directory from
+# the working directory, so it has to be told where the app's is.
+ENV NODE_CONFIG_DIR=/app/config
+WORKDIR /workspace
+
 # uid 1000, which matches the host account this is developed on, so a bind
 # mount needs no ownership juggling.
 USER node
 
-CMD ["node", "src/index.js"]
+CMD ["node", "/app/src/index.js"]
