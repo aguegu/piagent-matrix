@@ -20,3 +20,13 @@ Dockerfile
 docs
 *.md
 !README.md
+
+# Provisioning and development, not runtime. Neither can work in the image
+# anyway: cross-signing needs matrix-js-sdk, which `npm ci --omit=dev` leaves
+# out, and cross-sign-container.sh expects a deployment directory with its own
+# .env — which a container does not have, its environment coming from
+# env_file at run time. A script that is present but cannot work is worse than
+# one that is absent, because someone will try it.
+scripts
+test
+prompts

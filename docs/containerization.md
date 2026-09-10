@@ -222,9 +222,11 @@ again — which is the whole reason `data/` is mounted.
   approval gate. A container bounds what that reaches, which is worth having,
   but `MATRIX_ALLOWED_USERS` is still the thing deciding who may drive it.
 - **Provisioning still needs a checkout.** Cross-signing runs from the repo
-  rather than the image, because the SDK it needs is a devDependency. Fine for
-  a once-per-device operation, but it means a deployment directory is not
-  quite self-contained.
+  rather than the image, because the SDK it needs is a devDependency. The
+  image therefore leaves `scripts/` and `test/` out altogether — a script
+  that is present but cannot work is worse than one that is absent, since
+  someone will try it. Fine for a once-per-device operation, but it means a
+  deployment directory is not quite self-contained.
 - **Anything bind-mounted is not isolated.** A mounted workspace with API keys
   in it is as reachable from the container as it was from the host. Mounting
   the host's real workspace into the sandbox gives most of the boundary away,
