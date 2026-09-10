@@ -605,6 +605,16 @@ function describeSessionReport(stats) {
   return lines.join("\n");
 }
 
+/** Where the agent lives, when that is somewhere it cannot see out of. */
+function sandboxSection() {
+  if (config.get("agent.sandbox") !== "container") return "";
+  return renderPart("living-in-container", {
+    DATA_DIR: resolve(storagePaths.dataDir),
+    SESSION_DIR: resolve(config.get("agent.sessionDir") || storagePaths.dataDir),
+    BOT_CWD: config.get("agent.cwd"),
+  });
+}
+
 /** The scheduling section, or nothing where a real cron daemon exists. */
 function schedulingSection() {
   const crontabFile = config.get("agent.crontabFile");
@@ -779,6 +789,7 @@ async function main() {
     // Deployment-specific sections live in agent/parts/ and are pulled in
     // where they apply. A host with a real cron gets nothing here, because
     // the agent already knows how to drive `crontab`.
+    WHERE_YOU_ARE: sandboxSection(),
     SCHEDULING: schedulingSection(),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),

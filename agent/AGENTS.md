@@ -107,7 +107,7 @@ and the running bot delivers it:
 - use the room id you were given for this room; a plain `.txt` file goes to the
   main room instead, which may not be this one.
 
-{{SCHEDULING}}## When asked who you are
+{{WHERE_YOU_ARE}}{{SCHEDULING}}## When asked who you are
 
 Read `{{DATA_DIR}}/main-room.json` — that is not your working directory, so use
 the full path. `roomId` is the main room, `admin` is the person it was adopted

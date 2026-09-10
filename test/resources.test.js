@@ -102,11 +102,13 @@ describe("installing the bot's standing instructions", () => {
     // Guards the pairing between agent/*.md and the values index.js passes.
     const shipped = readFileSync(join(SHIPPED, "AGENTS.md"), "utf8");
     const used = [...new Set([...shipped.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))].sort();
+    // Sorted, so the two section placeholders land where the alphabet puts
+    // them rather than where they read.
     assert.deepEqual(used, [
       "BOT_CWD", "BOT_NAME", "DATA_DIR", "INBOX_DIR", "MATRIX_USER_ID", "OUTBOX_DIR",
-      // A whole paragraph rather than a path, and empty where a real cron
-      // exists — see describeScheduling in index.js.
-      "SCHEDULING",
+      // Whole sections rather than paths, each empty where it does not apply:
+      // see schedulingSection and sandboxSection in index.js.
+      "SCHEDULING", "WHERE_YOU_ARE",
     ]);
   });
 
@@ -163,7 +165,8 @@ describe("optional sections of AGENTS.md", () => {
 
   it("supplies every placeholder each shipped part uses", () => {
     // The same guard AGENTS.md has, for the parts beside it.
-    const supplied = ["CRONTAB_FILE", "CRON_LOG", "CRON_ALIVE", "INBOX_DIR", "OUTBOX_DIR"];
+    const supplied = ["CRONTAB_FILE", "CRON_LOG", "CRON_ALIVE", "INBOX_DIR", "OUTBOX_DIR",
+                      "DATA_DIR", "SESSION_DIR", "BOT_CWD"];
     for (const file of readdirSync(PARTS).filter((n) => n.endsWith(".md"))) {
       const text = readFileSync(join(PARTS, file), "utf8");
       for (const [, name] of text.matchAll(/\{\{(\w+)\}\}/g)) {

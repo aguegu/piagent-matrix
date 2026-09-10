@@ -96,5 +96,10 @@ export default {
     // real cron daemon, where `crontab` works and the agent already knows it.
     // What the agent is told about scheduling follows from this being set.
     crontabFile: process.env.CRONTAB_FILE || "",
+    // Set by the image. What it changes is what the agent is told about where
+    // it lives — that most paths do not survive, that /tmp is not shared with
+    // the container its jobs run in, and that the host is out of reach.
+    // Empty on a host, where none of that is true.
+    sandbox: process.env.AGENT_SANDBOX || "",
   },
 };
