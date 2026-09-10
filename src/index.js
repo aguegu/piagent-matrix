@@ -31,7 +31,7 @@ import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
-import { enabledParts, installAgentResources, publishParts, seedEnabled } from "./resources.js";
+import { describeParts, enabledParts, installAgentResources, publishParts, seedEnabled } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
@@ -768,10 +768,11 @@ async function main() {
   // an image they did not build can read what they are turning on. The seed
   // runs once; after that parts-enabled is theirs, and an empty one means
   // everything is off rather than that something needs repairing.
-  const availableDir = resolve(storagePaths.dataDir, "parts");
+  const availableDir = resolve(storagePaths.dataDir, "parts-available");
   const enabledDir = resolve(storagePaths.dataDir, "parts-enabled");
   publishParts(availableDir);
   seedEnabled(enabledDir, availableDir, config.get("agent.parts"));
+  LogService.info("bot", describeParts(enabledDir, availableDir));
 
   installAgentResources(resolve(config.get("agent.agentDir")), {
     // Whatever is linked in parts-enabled, in the order it sorts. One bag of

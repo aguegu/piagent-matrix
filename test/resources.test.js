@@ -212,7 +212,7 @@ describe("available parts, and which are enabled", () => {
   let data, avail, enabled;
   beforeEach(() => {
     data = mkdtempSync(join(tmpdir(), "partsvol-"));
-    avail = join(data, "parts");
+    avail = join(data, "parts-available");
     enabled = join(data, "parts-enabled");
   });
   afterEach(() => rmSync(data, { recursive: true, force: true }));

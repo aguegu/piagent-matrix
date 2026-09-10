@@ -34,7 +34,7 @@ export const SHIPPED = fileURLToPath(new URL("../agent", import.meta.url));
 export const PARTS = fileURLToPath(new URL("../agent/parts", import.meta.url));
 
 /**
- * Publish the shipped parts where an operator can see and edit them.
+ * Publish the shipped parts into the available directory.
  *
  * Available has to be visible. Sections sealed inside the image are no use
  * to someone running one they did not build — they cannot read what they are
@@ -132,6 +132,14 @@ export function seedEnabled(enabledDir, availableDir, names = []) {
   });
   LogService.info("resources", `Enabled ${names.join(", ") || "nothing"} in ${enabledDir}; it is yours from now on.`);
   return true;
+}
+
+/** A line in the log saying what the agent was told, and from where. */
+export function describeParts(enabledDir, availableDir) {
+  const count = (dir) => {
+    try { return readdirSync(dir).filter((n) => n.endsWith(".md")).length; } catch { return 0; }
+  };
+  return `Sections: ${count(enabledDir)} enabled in ${enabledDir}, ${count(availableDir)} available in ${availableDir}.`;
 }
 
 /**

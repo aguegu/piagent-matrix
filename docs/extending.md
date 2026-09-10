@@ -66,7 +66,7 @@ empty where it does not.
 `sites-available` and `sites-enabled`, on the data volume:
 
 ```
-$DATA_DIR/parts/            available. The shipped sections are published here
+$DATA_DIR/parts-available/  available. The shipped sections are published here
                             on every start, so you can read what you are
                             enabling, and yours sit beside them
 $DATA_DIR/parts-enabled/    enabled. A copy here turns one on; order is how
@@ -84,8 +84,8 @@ read from the host and from inside the container, and a copy is a file either
 way, on any filesystem, with nothing to dangle.
 
 Turning one off is `rm`. Reordering is renaming a prefix. Editing is editing —
-the enabled copy is yours outright, and `parts/` keeps the shipped version to
-compare against or copy back if you want ours again. Nothing needs a rebuild,
+the enabled copy is yours outright, and `parts-available/` keeps the shipped
+version to compare against or copy back if you want ours again. Nothing needs a rebuild,
 and nothing needs a variable.
 
 `AGENT_PARTS` only seeds a **fresh** install — the first start creates
@@ -99,10 +99,11 @@ values serves them all, and a part takes what it needs — `{{DATA_DIR}}`,
 `{{CRONTAB_FILE}}`, `{{CRON_LOG}}`, `{{CRON_ALIVE}}`.
 
 Writing one of your own needs no checkout and no rebuild: a markdown file in
-`$DATA_DIR/parts/`, a link in `parts-enabled/`, restart. Editing one of ours
+`$DATA_DIR/parts-available/`, a copy in `parts-enabled/`, restart. Editing one of ours
 works too — the published copies carry the managed marker, and a file without
 it is left alone, so the moment you change one it stops being ours to
-overwrite. A part shipped *with the bot* goes in `agent/parts/` in the repo,
+overwrite. A part shipped *with the bot* goes in `agent/parts/` in the repo — the source
+that gets published into `parts-available/`,
 and if it needs a value nothing supplies yet, add that to the bag in
 `src/index.js` and to the guard in `test/resources.test.js`.
 
