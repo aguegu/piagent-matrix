@@ -175,10 +175,27 @@ describe("optional sections of AGENTS.md", () => {
     }
   });
 
-  it("does not install the parts directory as a context file", () => {
-    // pi reads one context file per directory; a stray parts/ copied into
-    // PI_AGENT_DIR would be clutter at best.
-    assert.ok(!readdirSync(SHIPPED).includes("parts.md"));
-    assert.ok(readdirSync(SHIPPED).includes("parts"), "parts is a directory beside the shipped files");
+  it("installs the sections' text, and not the parts directory", () => {
+    // The invariant, tested by installing rather than by inspecting the
+    // source: pi reads one context file per directory, so a parts/ copied
+    // into PI_AGENT_DIR would be dead weight, and a section that failed to
+    // splice would leave the agent reading a literal {{PLACEHOLDER}}.
+    const dir = mkdtempSync(join(tmpdir(), "agentdir-"));
+    try {
+      installAgentResources(dir, {
+        DATA_DIR: "/data", BOT_CWD: "/workspace", OUTBOX_DIR: "/data/outbox",
+        INBOX_DIR: "/data/inbox", MATRIX_USER_ID: "@b:example.org", BOT_NAME: "b",
+        WHERE_YOU_ARE: "## Where you are\n\nInside a container.\n",
+        SCHEDULING: "## Scheduling\n\nA file.\n",
+      });
+
+      assert.deepEqual(readdirSync(dir), ["AGENTS.md"], "one context file, nothing beside it");
+      const installed = readFileSync(join(dir, "AGENTS.md"), "utf8");
+      assert.match(installed, /## Where you are/, "the section is spliced in, not linked");
+      assert.match(installed, /## Scheduling/);
+      assert.doesNotMatch(installed, /\{\{/, "and nothing is left for the agent to puzzle over");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
