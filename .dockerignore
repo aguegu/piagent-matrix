@@ -1,0 +1,22 @@
+# The image installs its own; a host node_modules carries the host's native
+# binding and would shadow the one built for the image.
+node_modules
+
+# State, never baked into an image. data/ in particular is the bot's Matrix
+# identity — an image carrying it would clone the device wherever it ran.
+data
+sessions
+inbox
+outbox
+
+# Real credentials live here. .env is the committed template and is harmless.
+.env.local
+.env.*.local
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docs
+*.md
+!README.md
