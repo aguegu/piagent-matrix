@@ -158,17 +158,22 @@ processes  host 161         !=  container 4            (this one is namespaced)
 So `free` and `df /` report the *host's* figures from inside a container, and
 a memory report would be right. What is not available is anything namespaced
 or absent: the process list is four entries, and there is no `docker`, no host
-cron, no host filesystem. `hourly-stats.sh` began life running `docker ps`
-stats, which simply cannot work in here.
+cron, no host filesystem. A job that reaches for those fails in here, and the
+failure is mixed rather than clean — half the report correct, half missing —
+which is worse than one that plainly cannot run.
 
-That makes the failure mixed rather than clean — half the report correct, half
-missing — which is worse than a job that plainly cannot run. Host monitoring
-belongs to the host, by some route that is not the agent's sandbox, and the
-tempting fix of mounting the inbox through puts a hole in the boundary for the
-sake of one report.
+The fourth job, an hourly system-health report, was the example of that. It
+turned out to be the wrong example: by the time it was measured it used only
+`top`, `free`, `df` and `jq`, all of which work in here and all of which read
+non-namespaced `/proc`, so it would have reported the host correctly by
+accident. It has since been deleted rather than migrated — a bot with a shell
+can produce that report on request, and a script maintained for it was upkeep
+for something the agent regenerates in a sentence.
 
-That is the split: **by what a job needs to see**, and a job that needs to see
-the host does not belong in here.
+The split stands even so: **by what a job needs to see**, and a job that needs
+to see the host does not belong in here. It just had one member fewer than
+first thought, and the way to tell was to read the script rather than to
+remember what it used to do.
 
 ### The decision: a crontab file, not a crontab
 
