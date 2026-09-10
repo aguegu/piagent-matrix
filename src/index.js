@@ -31,7 +31,7 @@ import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
 import { MainRoom, chooseAdmin, roomFits } from "./main-room.js";
-import { installAgentResources, renderParts } from "./resources.js";
+import { installAgentResources, PARTS as SHIPPED_PARTS, renderParts } from "./resources.js";
 import { BUILD, describeStart } from "./version.js";
 import { createLoopGuard } from "./loop-guard.js";
 import { claimInstanceLock } from "./instance-lock.js";
@@ -779,7 +779,12 @@ async function main() {
       CRONTAB_FILE: crontabFile,
       CRON_LOG: crontabFile ? join(dirname(crontabFile), "cron.log") : "",
       CRON_ALIVE: crontabFile ? join(dirname(crontabFile), "cron-alive") : "",
-    }),
+    }, [
+      // An operator's own, on the data volume and so editable in a published
+      // image, then the ones shipped. Same name in both means theirs wins.
+      resolve(storagePaths.dataDir, "parts"),
+      SHIPPED_PARTS,
+    ]),
     DATA_DIR: resolve(storagePaths.dataDir),
     BOT_CWD: config.get("agent.cwd"),
     OUTBOX_DIR: resolve(config.get("outbox.dir")),

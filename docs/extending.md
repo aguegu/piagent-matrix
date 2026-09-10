@@ -62,25 +62,35 @@ genuinely differs, the difference is a **part**: a markdown file in
 `agent/parts/`, pulled into a `{{PLACEHOLDER}}` where it applies and left
 empty where it does not.
 
-**Available is not enabled**, in nginx's sense. Everything in
-`agent/parts/` can be included; `AGENT_PARTS` says which this deployment
-actually uses, and in what order:
+**Available is not enabled**, in nginx's sense, and available comes from two
+places:
 
 ```
-AGENT_PARTS=living-in-container,scheduling-crontab   # the image
-AGENT_PARTS=                                         # a host: none of it applies
+$DATA_DIR/parts/     yours — on the data volume, editable in a published image
+agent/parts/         ours  — shipped in the image
+```
+
+Searched in that order, so writing `$DATA_DIR/parts/living-in-container.md`
+replaces our version of that section without touching the image.
+
+`AGENT_PARTS` says which are enabled, and in what order:
+
+```
+AGENT_PARTS=living-in-container,scheduling-crontab   # the image's default
+AGENT_PARTS=                                         # a host: none applies
+AGENT_PARTS=living-in-container,house-style          # ours, then one of yours
 ```
 
 They are joined into `{{PARTS}}` in `AGENTS.md`. One bag of values serves them
-all, and a part takes what it needs.
+all, and a part takes what it needs — `{{DATA_DIR}}`, `{{SESSION_DIR}}`,
+`{{BOT_CWD}}`, `{{INBOX_DIR}}`, `{{OUTBOX_DIR}}`, `{{CRONTAB_FILE}}`,
+`{{CRON_LOG}}`, `{{CRON_ALIVE}}`.
 
-Adding one:
-
-1. write `agent/parts/<name>.md`, with `{{VARS}}` for anything path-like;
-2. if it needs a value nothing supplies yet, add it to the bag in
-   `src/index.js` and to the guard in `test/resources.test.js`;
-3. enable it where it applies — the `Dockerfile`, a compose `environment`, or
-   an `.env`.
+Writing one of your own needs no checkout and no rebuild: drop the markdown in
+`$DATA_DIR/parts/`, add its name to `AGENT_PARTS`, restart. A part shipped
+with the bot goes in `agent/parts/` instead, and if it needs a value nothing
+supplies yet, add that to the bag in `src/index.js` and to the guard in
+`test/resources.test.js`.
 
 Nothing in code decides. A part that is enabled but missing is logged as an
 error and skipped, and one whose placeholders resolve to empty strings warns —

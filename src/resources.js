@@ -47,25 +47,35 @@ export function renderPart(name, vars = {}) {
 /**
  * The enabled parts, in the order given, as one block.
  *
- * Available is not enabled: everything in `agent/parts/` can be included, and
- * a deployment says which are. That list belongs in configuration where it can
- * be read, rather than in branches here.
+ * Available is not enabled: a directory holds every section that *could* be
+ * included, and the enabled list says which are. Two directories, searched in
+ * order — an operator's own first, then the ones shipped in the image — so a
+ * deployment can add sections of its own, or replace one of ours by writing a
+ * file with the same name. That directory is on the data volume, which is the
+ * only part of a published image an operator can actually edit.
  *
  * A named part that does not exist, or one whose placeholders resolve to
  * nothing, is logged rather than thrown — a bot missing a paragraph should
  * still answer — but logged loudly, because the failure is otherwise an
  * instruction the agent never sees and nobody misses.
  */
-export function renderParts(names = [], vars = {}) {
+export function renderParts(names = [], vars = {}, dirs = [PARTS]) {
   const out = [];
   for (const name of names) {
     let text;
-    try {
-      text = readFileSync(join(PARTS, `${name}.md`), "utf8");
-    } catch {
-      LogService.error("resources", `AGENTS.md part "${name}" is enabled but not in ${PARTS} — the agent will not be told what it says.`);
+    let from;
+    for (const dir of dirs) {
+      try {
+        text = readFileSync(join(dir, `${name}.md`), "utf8");
+        from = dir;
+        break;
+      } catch { /* try the next */ }
+    }
+    if (text === undefined) {
+      LogService.error("resources", `AGENTS.md part "${name}" is enabled but is in none of ${dirs.join(", ")} — the agent will not be told what it says.`);
       continue;
     }
+    if (from !== PARTS) LogService.info("resources", `Using ${name}.md from ${from}.`);
     for (const [, key] of text.matchAll(/\{\{(\w+)\}\}/g)) {
       if (!vars[key]) {
         LogService.warn("resources", `part "${name}" uses {{${key}}}, which is empty — is it enabled on a deployment that does not configure it?`);

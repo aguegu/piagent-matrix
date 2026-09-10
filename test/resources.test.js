@@ -219,10 +219,33 @@ describe("available parts, and which are enabled", () => {
     assert.doesNotMatch(one, /## Scheduling/, "an available part stays out until enabled");
   });
 
+  it("takes an operator's own part, and lets it replace one of ours", () => {
+    // The shipped parts are inside the image; a published image is not
+    // editable. An operator's directory is on the data volume, which is.
+    const mine = mkdtempSync(join(tmpdir(), "parts-"));
+    try {
+      writeFileSync(join(mine, "house-style.md"), "## House style\n\nBe brief in {{BOT_CWD}}.\n");
+      writeFileSync(join(mine, "living-in-container.md"), "## Where you are\n\nSomewhere of our own choosing.\n");
+      const dirs = [mine, PARTS];
+
+      const added = renderParts(["house-style"], vars, dirs);
+      assert.match(added, /Be brief in \/workspace/, "their own part renders, placeholders and all");
+
+      const replaced = renderParts(["living-in-container"], vars, dirs);
+      assert.match(replaced, /Somewhere of our own choosing/, "same name means theirs wins");
+      assert.doesNotMatch(replaced, /not shared with anything/, "and ours is not also included");
+
+      const shippedOnly = renderParts(["scheduling-crontab"], vars, dirs);
+      assert.match(shippedOnly, /## Scheduling/, "ours still resolves when they have not overridden it");
+    } finally {
+      rmSync(mine, { recursive: true, force: true });
+    }
+  });
+
   it("survives a part that is enabled but missing", () => {
     // A typo in the list must not take the bot down, but must not pass in
     // silence either — the agent would simply never be told that thing.
-    const out = renderParts(["living-in-container", "no-such-part"], vars);
+    const out = renderParts(["living-in-container", "no-such-part"], vars, [PARTS]);
     assert.match(out, /## Where you are/, "the rest still renders");
     assert.doesNotMatch(out, /no-such-part/);
   });
