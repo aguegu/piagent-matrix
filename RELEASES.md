@@ -2,6 +2,10 @@
 
 ## 0.3.0 (in progress)
 
+### Documentation
+
+* **[docs/containerization.md](docs/containerization.md)** — the constraints before the Dockerfile, since most of them fail after a clean build rather than during one. Debian rather than Alpine, because the crypto binding ships `linux-x64-gnu` and declares no musl variant; install scripts disabled everywhere except the one package that is *fetched* by one; ripgrep in the image, because pi's `grep` tool shells out to `rg` and this host has always had it. What must outlive the container, with `data/` marked as the bot's Matrix identity rather than a cache. And cron split by what a job needs to see: the three that only produce a spool file can run inside, `hourly-stats.sh` cannot, because `df` and `free` in a container describe the container and the job would go on reporting the wrong machine
+
 ## 0.2.5 (2026-09-10)
 
 Two things, both found by watching what the bots were actually doing rather

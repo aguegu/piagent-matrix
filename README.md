@@ -220,6 +220,7 @@ directory, and consider passing an explicit `tools` allowlist to
 | [More than one bot in a room](docs/multi-bot.md) | `m.notice`, and bounding a run of bots answering bots |
 | [Extending the agent](docs/extending.md) | extensions, skills, prompt templates, and the shipped `AGENTS.md` |
 | [Running it](docs/operations.md) | cross-signing, what lives in `data/`, known gaps |
+| [In a container](docs/containerization.md) | the plan: base image, what must survive, and what happens to cron |
 | [pi integration](docs/pi-integration.md) | pi API notes and the behaviour that is easy to get wrong |
 | [SECURITY.md](SECURITY.md) | blast radius, and the dependency advisories |
 | [Releases](RELEASES.md) · [blog](docs/blog/) | what changed, and a few things worth writing up |
