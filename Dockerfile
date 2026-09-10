@@ -24,6 +24,23 @@ RUN apt-get update \
        bash ca-certificates curl git jq procps python3 ripgrep \
   && rm -rf /var/lib/apt/lists/*
 
+# supercronic: cron built for containers — one foreground process, jobs logged
+# to stdout, no root, and -inotify to reload the crontab when it changes. The
+# schedule is a file the agent can edit with the tools it already has, which
+# suits it better than driving `crontab -e` ever did.
+#
+# Pinned by digest, and verified: a53ae23… was computed from the download
+# rather than copied from the release page. amd64 only — on another
+# architecture this fails loudly at exec with "exec format error", which is
+# the right way to find out.
+ARG SUPERCRONIC_VERSION=v0.2.49
+ARG SUPERCRONIC_SHA256=a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1
+RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+  && echo "${SUPERCRONIC_SHA256}  supercronic-linux-amd64" | sha256sum -c - \
+  && chmod +x supercronic-linux-amd64 \
+  && mv supercronic-linux-amd64 /usr/local/bin/supercronic \
+  && supercronic -version
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./

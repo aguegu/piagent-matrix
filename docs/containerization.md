@@ -154,27 +154,35 @@ The rejected alternatives, for the record:
   hands the container arbitrary host command execution. The isolation would be
   theatre.
 
-### Still open: one container or two
+### Settled: two containers
 
-`supercronic` is a separate process either way. It can run beside the bot under
-an init, or in its own container sharing the volumes.
+`supercronic` is a separate process either way, so it runs in its own
+container rather than beside the bot under a supervisor. They need nothing
+from each other: a job's entire output is a file in `/data/inbox`, which is
+the interface the spool already was. One process each, no init script holding
+two services together, and a scheduler that dies does so visibly instead of
+silently.
 
-A sidecar is the better fit for a reason specific to this project: **the spool
-is already the interface between "something that schedules" and "the bot".**
-A cron container that mounts `inbox/` and the workspace needs no other contact
-with the bot at all — no supervisor, no shared lifecycle, one process each.
-That is the same boundary the outbox was built around in 0.2.0.
+The cron container gets `/data` and the workspace, and deliberately **not** the
+bot's `env_file` — the Matrix password and recovery key are no business of a
+scheduler.
 
-Two things to test before committing to it:
+The concern about inotify turned out to be unfounded, which was worth checking
+rather than assuming: the agent may rewrite the crontab atomically (temp file,
+then rename), which normally leaves a file watch pointing at the old inode.
+Both edit styles reload:
 
-- **inotify across the mount.** The agent writes the crontab from the bot
-  container; supercronic watches it from another. Both are the same host
-  directory, so events should propagate — but if the agent writes atomically
-  (temp file, then rename) the watch follows the old inode and may go deaf.
-  `SIGUSR2`, or editing in place, is the fallback.
-- **A bare environment.** Cron hands jobs almost no environment — no image
-  `ENV`, minimal `PATH`. The `%` incident is a reminder of how quietly a
-  crontab can be wrong.
+```
+11:50:40  read crontab: /data/crontab     (append, in place)
+11:50:44  read crontab: /data/crontab     (write temp, then mv)
+```
+
+`SIGUSR2` remains the manual fallback.
+
+The other caution stands: **cron hands jobs almost no environment** — no image
+`ENV`, minimal `PATH`. A job that works when you run it by hand can still fail
+under the scheduler, and the `%` incident is a reminder of how quietly a
+crontab can be wrong.
 
 ## Logging a provider in
 
