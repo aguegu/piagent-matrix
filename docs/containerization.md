@@ -1,7 +1,8 @@
 # Running it in a container
 
 The `Dockerfile` works: a second bot runs from it, talks in Matrix, and has a
-cross-signed device. Cron is not in it yet — that is the next piece, and the
+cross-signed device. For the steps rather than the reasoning, see the
+[container quickstart](container-quickstart.md). Cron is not in it yet — that is the next piece, and the
 decision behind it is recorded below.
 
 Most of what follows is constraints rather than instructions, because nearly
