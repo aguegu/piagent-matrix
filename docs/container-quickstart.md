@@ -26,11 +26,12 @@ happens to cron — see [containerization](containerization.md).
 ## 1. Get the image
 
 ```sh
-docker pull aguegu/piagent-matrix:edge
+docker pull aguegu/piagent-matrix:latest
 ```
 
-`edge` is the current build while 0.3.0 is still open; there is no `latest`
-yet, deliberately, so nothing pulls an unreleased image by accident.
+`latest` is the current release. `0.3.0` and the other version tags pin one, which
+is what to use if you would rather decide when to move. `edge` is the build
+from an open release — ahead of `latest`, and not always a good idea.
 
 **linux/amd64 only.** The crypto binding ships `linux-x64-gnu` with no musl
 build, and supercronic is pinned to amd64. On another architecture this fails
@@ -66,7 +67,7 @@ start and then fail to write its own token.
 ```yaml
 services:
   bot:
-    image: aguegu/piagent-matrix:edge
+    image: aguegu/piagent-matrix:latest
     container_name: mybot
     env_file: .env
     init: true                 # the agent spawns shells constantly; reap them

@@ -37,7 +37,7 @@ then cannot write.
 ```yaml
 services:
   bot:
-    image: aguegu/piagent-matrix:edge
+    image: aguegu/piagent-matrix:latest
     container_name: mybot
     env_file: .env
     init: true                 # the agent spawns shells constantly; reap them
