@@ -244,6 +244,25 @@ export class AgentManager {
         LogService.warn("agent", `model fallback: ${result.modelFallbackMessage}`);
       }
 
+      // Loading an extension is not the same as starting it. pi emits
+      // `session_start` from bindExtensions, and an extension that does its
+      // work on that event sits inert until something binds — which nothing
+      // here ever did, because the bot has no UI to bind.
+      //
+      // pi-mcp-adapter is where that finally showed: it initialises MCP only
+      // in its session_start handler, so its tools registered from the
+      // metadata cache and every call answered "MCP not initialized". `.reload`
+      // could not repair it either — pi re-emits session_start on reload only
+      // when bindings already exist, so an unbound session stays unbound.
+      //
+      // Deliberately no uiContext. The adapter checks `ctx.hasUI` before
+      // showing dialogs and notifications, and there is no terminal here to
+      // show them in; an error listener is all this needs, and is enough to
+      // make pi's own `hasBindings` check true so `.reload` works from now on.
+      await result.session.bindExtensions?.({
+        onError: (err) => LogService.error("agent", `extension: ${err?.message ?? err}`),
+      });
+
       // Extensions come from settings.json in agentDir, installed with
       // `pi install`. Report what loaded: otherwise there is no way to tell an
       // extension is active short of asking the agent to use it, and a failed

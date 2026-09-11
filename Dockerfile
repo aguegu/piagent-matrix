@@ -20,15 +20,20 @@ FROM node:24-bookworm-slim
 # project has spent two releases removing. Scheduling is a decision of its
 # own — see docs/containerization.md.
 #
-# wget and bsdextrautils (`column`) are the exceptions to the counting: zero
-# and one use respectively. They are here because a container is a sandbox
-# rather than a host — a tool the agent reaches for and does not find costs it
-# a turn, and the blast radius inside a boundary already drawn is nil. That
-# reasoning is about the sandbox, not the tools, and does not extend to the
-# host deployment, which has the whole machine.
+# wget, bsdextrautils (`column`) and time are the exceptions to the counting:
+# zero or one use apiece. They are here because a container is a sandbox rather
+# than a host — a tool the agent reaches for and does not find costs it a turn,
+# and the blast radius inside a boundary already drawn is nil. That reasoning
+# is about the sandbox, not the tools, and does not extend to the host
+# deployment, which has the whole machine.
+#
+# `time` is the one that looks redundant and is not: bash has it as a keyword,
+# but /bin/sh here is dash, which does not — so `time some-command` in a
+# scheduled job or a `sh -c` fails with "time: not found" rather than timing
+# anything. This is /usr/bin/time, which any shell can run.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep wget \
+       bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep time wget \
   && rm -rf /var/lib/apt/lists/*
 
 # supercronic: cron built for containers — one foreground process, jobs logged
@@ -48,11 +53,22 @@ RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/${SUPE
   && mv supercronic-linux-amd64 /usr/local/bin/supercronic \
   && supercronic -version
 
+# uv, so an MCP server that ships as a Python package can run: `uvx <server>`
+# fetches it from PyPI into an isolated cached environment and runs its entry
+# point, leaving the image's own python3 untouched. Node MCP servers already
+# work through npx; this is the other half of that ecosystem, and without it
+# something like alpaca-mcp-server has no way to start at all.
+#
+# Copied from Astral's own image rather than fetched and checksummed, which is
+# what their docs recommend and is the whole pin: the tag names the version.
+# The binaries are statically linked musl, so they run on this Debian base.
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /usr/local/bin/
+
 # Provenance, for an image someone pulls rather than builds: where the source
 # is, what it is, and which platform it can possibly run on. The crypto
 # binding is linux-x64-gnu with no musl build and supercronic is pinned to
 # amd64, so this is an amd64 image and says so.
-ARG VERSION=0.3.0-dev
+ARG VERSION=0.3.1-dev
 LABEL org.opencontainers.image.title="piagent-matrix" \
       org.opencontainers.image.description="A Matrix bot that fronts the pi coding agent" \
       org.opencontainers.image.source="https://github.com/aguegu/piagent-matrix" \
@@ -104,6 +120,11 @@ COPY . .
 # interactive `pi /login` writes to ~/.pi/agent inside the container — an
 # unmounted path — so the login looks like it worked and is gone on the next
 # run. The bot sets pi's variable at runtime anyway; this makes the CLI agree.
+#
+# UV_CACHE_DIR is on /data for the same reason. uv caches to $HOME by default,
+# which is not a mounted path here, so an MCP server installed by uvx would be
+# re-downloaded — 80MB and 70-odd packages for one server — every time the
+# container is recreated. On the volume it is fetched once.
 ENV DATA_DIR=/data \
     PI_AGENT_DIR=/data/pi \
     PI_CODING_AGENT_DIR=/data/pi \
@@ -112,8 +133,10 @@ ENV DATA_DIR=/data \
     OUTBOX_DIR=/data/outbox \
     BOT_CWD=/workspace \
     CRONTAB_FILE=/data/crontab \
-    AGENT_PARTS=living-in-container,scheduling-crontab
-RUN mkdir -p /data/inbox /data/outbox /sessions /workspace \
+    AGENT_PARTS=living-in-container,scheduling-crontab \
+    UV_CACHE_DIR=/data/uv \
+    UV_PYTHON_INSTALL_DIR=/data/uv/python
+RUN mkdir -p /data/inbox /data/outbox /data/uv /sessions /workspace \
   && chown -R node:node /data /sessions /workspace
 
 # The app lives in /app; the agent lives in /workspace, and that is where a

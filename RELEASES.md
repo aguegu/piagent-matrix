@@ -1,5 +1,15 @@
 # Releases
 
+## 0.3.1 (in progress)
+
+### New Features
+
+* **Extensions were loaded but never started** (`src/agent.js`). pi emits `session_start` from `AgentSession.bindExtensions`, and this bot never called it — there was no UI to bind. Loading is not starting: an extension that registers tools worked, and one that does its work on that event sat inert. `pi-mcp-adapter` is where it finally showed, because its tools come from a metadata cache and so appeared in the tool list while every call answered `MCP not initialized` — which looks exactly like a configuration fault and is not one. `.reload` could not repair it either, and not by accident: pi re-emits `session_start` on reload only `if (hasBindings)`, so an unbound session stays unbound and the emit is skipped in silence. Each session is now bound on creation, with an error listener and deliberately no `uiContext` — the adapter checks `ctx.hasUI` before opening dialogs, and a Matrix room is not a terminal. `.reload` reloads extensions properly from now on too. Present since extensions were first supported; `test/agent-bindings.test.js` fails without the fix
+
+* **`uv` in the image**, so an MCP server that ships as a Python package can actually run. `pi-mcp-adapter` launches a stdio server by command, and the ones worth having are split between two ecosystems: node servers already worked through `npx`, while anything Python — `uvx alpaca-mcp-server` and its kind — had nothing to start it, since the image carries a bare `python3` and no `pip`, `pipx` or `uv`. Copied from Astral's own image (`COPY --from=ghcr.io/astral-sh/uv:0.12.13`), which is what their docs recommend and is the whole pin: the tag names the version, and there is no checksum to keep in step. The binaries are statically linked musl and run on the Debian base
+* **`UV_CACHE_DIR=/data/uv`**, which is not optional. uv caches to `$HOME`, which is not a mounted path here, so a server installed by `uvx` would be re-fetched on every container recreate — measured at 72 packages and 81MB for one server, three seconds cold against nothing at all warm. On the volume it is downloaded once. Pin the server too (`uvx alpaca-mcp-server@2.3.1`): unpinned resolves to whatever PyPI holds the moment the cache next happens to be cold, which could be months from now
+* **`time`.** It looks redundant and is not — bash has `time` as a keyword, but `/bin/sh` here is dash, which does not, so `time some-command` in a scheduled job fails with `time: not found` rather than timing anything. This is `/usr/bin/time`, which any shell can run
+
 ## 0.3.0 (2026-09-11)
 
 ### New Features

@@ -74,17 +74,45 @@ like a dependency; `ca-certificates` is what lets the bot reach a homeserver
 over TLS.
 
 ```
-bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep wget
+bash bsdextrautils ca-certificates curl git jq procps python3 ripgrep time wget
 ```
 
-**Two are exceptions, and worth naming as such.** `wget` has zero uses
-against curl's 2174; `bsdextrautils` (`column`) has one. Counting says leave
-both out. They are in because a container is a sandbox rather than a host: a
-tool the agent reaches for and does not find costs it a turn, and the blast
-radius inside a boundary already drawn is nil. That argument is about the
-sandbox, not about the tools — it does not license adding whatever a normal
-image happens to have, and it does not transfer to the host deployment, which
-has the whole machine.
+**Three are exceptions, and worth naming as such.** `wget` has zero uses
+against curl's 2174; `bsdextrautils` (`column`) has one; `time` has none.
+Counting says leave all three out. They are in because a container is a
+sandbox rather than a host: a tool the agent reaches for and does not find
+costs it a turn, and the blast radius inside a boundary already drawn is nil.
+That argument is about the sandbox, not about the tools — it does not license
+adding whatever a normal image happens to have, and it does not transfer to
+the host deployment, which has the whole machine.
+
+`time` is the one that looks redundant. bash has `time` as a keyword, so on a
+host it needs no package — but `/bin/sh` here is dash, which has no such
+keyword, so `time some-command` in a `sh -c` or a scheduled job failed with
+`time: not found` rather than timing anything. With `/usr/bin/time` present,
+dash resolves it as an ordinary command and the same line works.
+
+**`uv` is a different kind of addition**, and does not come from apt. It is
+copied from Astral's own image, which is what their docs recommend and is the
+whole pin — the tag names the version, with no checksum to keep in step:
+
+```dockerfile
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /usr/local/bin/
+```
+
+It is here for MCP: `pi-mcp-adapter` starts a stdio server by command, node
+servers already ran through `npx`, and anything Python had nothing to start
+it — the image carries a bare `python3` and no `pip`, `pipx` or `uv`. `uvx
+<server>` fetches from PyPI into an isolated cached environment and runs the
+entry point, leaving the image's own `python3` untouched.
+
+The cache is the part that has to be deliberate. uv caches to `$HOME`, which
+is not a mounted path here, so `UV_CACHE_DIR=/data/uv` puts it on the volume:
+one server measured 72 packages and 81MB, three seconds cold and nothing at
+all warm, and without the variable that download repeats on every container
+recreate. Pin the server as well as uv — `uvx alpaca-mcp-server@2.3.1` —
+since an unpinned name resolves to whatever PyPI holds the next time the cache
+happens to be cold.
 
 The counting is what caught curl, jq and python3 missing in the first place,
 so the default stays: **add on evidence, and record the exceptions as
