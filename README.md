@@ -27,9 +27,8 @@ mkdir -p ~/containers/mybot/{data/inbox,data/outbox,data/pi,sessions,workspace}
 cd ~/containers/mybot
 ```
 
-Make them yourself before starting. Docker creates a missing bind-mount source
-as `root`, and the container runs as uid 1000 — it would start and then fail to
-write its own token.
+Make them first — Docker creates a missing one as `root`, which the container
+then cannot write.
 
 ### 2. Write two files
 
@@ -62,11 +61,10 @@ LOG_LEVEL=info
 ```
 
 **Set `MATRIX_ALLOWED_USERS`.** Empty means everyone, and the agent runs shell
-commands with no approval gate. The container bounds what that reaches; it does
-not decide who may ask.
+commands with no approval gate.
 
-Set nothing else. The image points `DATA_DIR`, `BOT_CWD` and the spool paths at
-the volumes above.
+Set nothing else — the image points `DATA_DIR`, `BOT_CWD` and the spool paths
+at the volumes above.
 
 ### 3. Log a model provider in
 
@@ -74,13 +72,7 @@ the volumes above.
 docker compose run --rm bot pi        # then, inside pi:  /login <provider>
 ```
 
-`pi`, not `npx pi` — the working directory has no `node_modules`, so npx would
-offer to install an unrelated public package of that name. Check the credential
-landed on your side, which is the point of the bind mount:
-
-```sh
-ls -l data/pi/auth.json
-```
+`data/pi/auth.json` appears when it worked.
 
 ### 4. Start it
 
@@ -105,9 +97,7 @@ Then, so Element stops flagging everything it sends:
 docker compose run --rm bot node /app/scripts/cross-sign.js
 ```
 
-It finds this deployment's device and credentials by itself, and is safe
-against a running container: it signs as a throwaway device and never opens the
-bot's crypto store. Ends in `SUCCESS — device is cross-signed.`
+Ends in `SUCCESS — device is cross-signed.` Safe to run while the bot is up.
 
 ---
 
@@ -117,6 +107,34 @@ running pi's own commands, changing what the agent is told, moving an existing
 host bot in, and a table of the failures this actually hits.
 
 Prefer to run it from a clone? **[From source](docs/from-source.md)**.
+
+## It is still pi
+
+A container changes the command, not the tool. The image carries pi's own CLI,
+and everything it writes lands in `data/pi` on your side of the bind mount, so
+extensions, skills, prompt templates and credentials persist and survive the
+container being recreated. Prefix what you would have typed:
+
+```sh
+docker compose exec bot pi install npm:pi-web-access   # add an extension
+docker compose exec bot pi list                        # what is installed
+docker compose exec bot pi update                      # extensions and model catalogs
+docker compose exec bot pi auth check --provider <name>
+```
+
+A newly installed extension needs a restart — `.reload` does not pick up a
+package that did not exist when the process started:
+
+```sh
+docker compose restart bot
+```
+
+Then `.info` in any room says which extensions actually loaded.
+
+The agent's standing instructions are `data/pi/AGENTS.md`, assembled at every
+start from sections you can edit in `data/parts-enabled/` — a markdown file,
+no rebuild and no image of your own. See
+**[extending the agent](docs/extending.md)**.
 
 ## How it works
 
