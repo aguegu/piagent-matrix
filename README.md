@@ -8,6 +8,116 @@ Built on [`matrix-bot-sdk`](https://github.com/turt2live/matrix-bot-sdk) with
 end-to-end encryption and an on-disk crypto store, so the bot keeps its device
 identity across restarts.
 
+## Quick start
+
+A published image and one directory. Nothing to build, no checkout, and no
+Node on the host — everything the bot *is* ends up under the directory you
+make here, which is also the thing you back up.
+
+**You need** Docker with compose, a Matrix account for the bot (its own, not
+yours), and a model provider you can log in to. For a verified device, turn on
+recovery for that account in Element first and keep the recovery key.
+
+**linux/amd64 only** — the crypto binding has no musl or arm64 build.
+
+### 1. Make a directory for it
+
+```sh
+mkdir -p ~/containers/mybot/{data/inbox,data/outbox,data/pi,sessions,workspace}
+cd ~/containers/mybot
+```
+
+Make them yourself before starting. Docker creates a missing bind-mount source
+as `root`, and the container runs as uid 1000 — it would start and then fail to
+write its own token.
+
+### 2. Write two files
+
+`compose.yml`:
+
+```yaml
+services:
+  bot:
+    image: aguegu/piagent-matrix:edge
+    container_name: mybot
+    env_file: .env
+    init: true                 # the agent spawns shells constantly; reap them
+    stop_grace_period: 30s     # shutdown releases the lock and disposes sessions
+    restart: unless-stopped
+    volumes:
+      - ./data:/data           # identity, provider credentials, spools, schedule
+      - ./sessions:/sessions   # per-room memory
+      - ./workspace:/workspace # the agent's own ground
+```
+
+`.env`, then `chmod 600 .env`:
+
+```sh
+MATRIX_HOMESERVER=https://matrix.example.org
+MATRIX_USER_ID=@mybot:matrix.example.org
+MATRIX_PASSWORD=<needed for the first login only>
+MATRIX_ALLOWED_USERS=@you:matrix.example.org
+MATRIX_RECOVERY_KEY=<for cross-signing, step 5>
+LOG_LEVEL=info
+```
+
+**Set `MATRIX_ALLOWED_USERS`.** Empty means everyone, and the agent runs shell
+commands with no approval gate. The container bounds what that reaches; it does
+not decide who may ask.
+
+Set nothing else. The image points `DATA_DIR`, `BOT_CWD` and the spool paths at
+the volumes above.
+
+### 3. Log a model provider in
+
+```sh
+docker compose run --rm bot pi        # then, inside pi:  /login <provider>
+```
+
+`pi`, not `npx pi` — the working directory has no `node_modules`, so npx would
+offer to install an unrelated public package of that name. Check the credential
+landed on your side, which is the point of the bind mount:
+
+```sh
+ls -l data/pi/auth.json
+```
+
+### 4. Start it
+
+```sh
+docker compose up            # foreground for the first run
+```
+
+Expect, in order: a password login, `Crypto ready=true`, and `Rooms: 0`.
+`data/token.json` appears on the host, after which the password is no longer
+needed.
+
+### 5. Invite it, then verify its device
+
+Invite the bot from an allowlisted account. It autojoins, and since this is its
+first room it adopts it as the [main room](docs/main-room.md) and says so —
+that message is the proof of the whole chain: login, encryption, sync, join.
+Talk to it, or send `.help`.
+
+Then, so Element stops flagging everything it sends:
+
+```sh
+docker compose run --rm bot node /app/scripts/cross-sign.js
+```
+
+It finds this deployment's device and credentials by itself, and is safe
+against a running container: it signs as a throwaway device and never opens the
+bot's crypto store. Ends in `SUCCESS — device is cross-signed.`
+
+---
+
+That is the whole path. **[Container quickstart](docs/container-quickstart.md)**
+walks the same ground in more detail and adds what comes next: scheduling,
+running pi's own commands, changing what the agent is told, moving an existing
+host bot in, and a table of the failures this actually hits.
+
+Prefer to run it from a clone? **[From source](docs/from-source.md)**.
+
 ## How it works
 
 ```
@@ -36,106 +146,6 @@ cron / scripts ──► inbox/  spool ──► AgentManager ──────
   agents in a room can talk; a run of automated messages with nobody else
   speaking stops after three, and a person speaking resumes it.
 
-## Getting started
-
-Requires Node 20+ (developed on 24) and a Matrix account for the bot to log in
-as. Every step below is needed on a fresh clone; skipping one fails at a
-different point, so they are in dependency order.
-
-### 1. Install
-
-```sh
-npm install
-```
-
-If npm declines to run install scripts, approve the crypto binding — it is not
-optional, see [step 2](#2-check-the-crypto-binding-landed).
-
-### 2. Check the crypto binding landed
-
-```sh
-ls node_modules/@matrix-org/matrix-sdk-crypto-nodejs/*.node
-node -e "require('@matrix-org/matrix-sdk-crypto-nodejs'); console.log('crypto binding OK')"
-```
-
-No `.node` file means npm skipped the postinstall. Approve that one package and
-re-install:
-
-```sh
-npm install-scripts approve @matrix-org/matrix-sdk-crypto-nodejs
-npm install
-```
-
-### 3. Configure
-
-```sh
-cp .env .env.local
-$EDITOR .env.local
-```
-
-`MATRIX_HOMESERVER` and `MATRIX_USER_ID` are required; `MATRIX_PASSWORD` is
-needed for the first login and for `cross-sign`. **Set `MATRIX_ALLOWED_USERS`** —
-empty means everyone, and the agent runs shell commands.
-
-### 4. Give the agent a model provider
-
-The bot reads pi's credentials from `PI_AGENT_DIR` (default `data/pi`), **not**
-`~/.pi/agent`. Skip this and the bot starts, joins, and then fails on the first
-message with `No models with complete auth are available in …`.
-
-```sh
-PI_CODING_AGENT_DIR=./data/pi npx pi
-# then inside pi:  /login <provider>
-```
-
-**Note the variable**: `PI_CODING_AGENT_DIR` is pi's own, `PI_AGENT_DIR` is this
-bot's, and the pi CLI ignores ours — writing to its own default instead, which
-looks like success and leaves the bot finding nothing.
-
-An API key in the environment or an existing `auth.json` work too, and there is
-a one-liner to check a provider resolved before starting:
-**[docs/model-providers.md](docs/model-providers.md)**.
-
-### 5. First start
-
-```sh
-npm start
-```
-
-It logs in with `MATRIX_PASSWORD` and writes `data/token.json` (mode 0600).
-After this the password is no longer needed to run.
-
-Start it from the repo root: `dotenv-flow` resolves `.env` from the working
-directory, and relative paths in it resolve from there too.
-
-### 6. Cross-sign the device
-
-```sh
-npm run cross-sign
-```
-
-Otherwise Element shows *"Encrypted by a device not verified by its owner"* on
-everything the bot sends. Needs `MATRIX_RECOVERY_KEY` in `.env.local`. Run it
-once per fresh login — rare, since the crypto store persists.
-
-### 7. Invite and test
-
-Invite the bot from an allowlisted account; it autojoins. Since this is its
-first room, it adopts it as the [main room](docs/main-room.md) and says so — that
-message is the confirmation the whole setup worked. Send it a message, or
-`.help` for what it answers to.
-
-## Troubleshooting a fresh install
-
-| Symptom | Cause |
-| --- | --- |
-| `Cannot find module '…-linux-x64-gnu'` | Install script skipped — step 2 |
-| `Missing config: matrix.homeserver` | `.env.local` missing or unfilled — step 3 |
-| `Missing config: agent.cwd (BOT_CWD)` | Started from a directory where `dotenv-flow` finds no `.env` — step 5 |
-| `No models with complete auth are available in …` | pi provider not authenticated in `PI_AGENT_DIR` — step 4. If you logged in with `PI_AGENT_DIR=… pi`, the credential went to pi's own default instead: pi's variable is `PI_CODING_AGENT_DIR` |
-| `Allowing … — MATRIX_ALLOWED_USERS is empty` | Anyone can drive the agent — step 3 |
-| "Encrypted by a device not verified by its owner" | Not cross-signed — step 6 |
-
 ## Commands
 
 A short allowlist, recognised before the agent sees the message. **Commands
@@ -160,15 +170,11 @@ Each is explained in **[docs/commands.md](docs/commands.md)**, including why
 everything except `.info`, `.compact` and `.session` — the three scoped to the
 room they are typed in — is answered only in the main room.
 
-## Scripts
+## Working on it
 
-| Command | What it does |
-| --- | --- |
-| `npm start` | Run the bot |
-| `npm test` | `node --test` over `test/**/*.test.js` |
-| `npm run cross-sign [DEVICE_ID]` | Cross-sign the bot's device |
-
-## Layout
+Clone it, `npm install`, `npm test` — the setup in full, and what to do when a
+fresh install goes wrong, is in **[from source](docs/from-source.md)**. There
+is no build step; `npm start` runs `src/index.js` directly.
 
 ```
 config/default.js       dotenv-flow bootstrap + config tree
@@ -181,18 +187,22 @@ src/outbox.js           spool watcher: files other processes want posted
 src/inbox.js            spool watcher: files run as prompts to the agent
 src/spool.js            the watching, claiming and parking both share
 src/resources.js        installs agent/ into PI_AGENT_DIR on start
+src/scheduler.js        supercronic as a child, when CRONTAB_FILE is set
+src/instance-lock.js    one bot per data directory
 src/version.js          which build this is, for .info and the startup log
 src/loop-guard.js       bounds a run of bots answering bots
 src/status.js           typing indicator (+ an unused edit-in-place helper)
 agent/AGENTS.template.md  the standing instructions, before substitution
+agent/parts/            the sections that depend on the deployment
 scripts/cross-sign.js   provisioning, matrix-js-sdk only
 docs/                   the longer form; see Documentation below
 test/                   node:test suites
-data/                   the bot's identity          (gitignored)
-outbox/                 outgoing spool              (gitignored)
-inbox/                  incoming prompts            (gitignored)
-sessions/               per-room agent history      (gitignored)
+Dockerfile              the published image
 ```
+
+Running from a clone also creates `data/`, `sessions/`, `inbox/` and `outbox/`
+here, all gitignored. In a container those are the mounted volumes instead,
+which is the main structural difference between the two ways of running it.
 
 ## Blast radius
 
@@ -210,18 +220,31 @@ directory, and consider passing an explicit `tools` allowlist to
 
 ## Documentation
 
+**Getting it running**
+
 | | |
 | --- | --- |
+| [Container quickstart](docs/container-quickstart.md) | the quick start above in full, plus scheduling, pi's own commands, and moving an existing host bot in |
+| [From source](docs/from-source.md) | the other way: a clone, `npm install`, and the failures a fresh one hits |
 | [Configuration](docs/configuration.md) | every environment variable, and why the crypto binding needs an install script |
 | [Model providers](docs/model-providers.md) | the three ways to give the agent a provider, and how to check one resolved |
-| [Commands](docs/commands.md) | what each command does, and why the main room holds the controls |
-| [Spools](docs/spools.md) | the outbox (text to post) and the inbox (work to do) |
-| [The main room](docs/main-room.md) | how the bot adopts a control channel, checks it, and repairs it |
-| [More than one bot in a room](docs/multi-bot.md) | `m.notice`, and bounding a run of bots answering bots |
-| [Extending the agent](docs/extending.md) | extensions, skills, prompt templates, and the shipped `AGENTS.md` |
 | [Running it](docs/operations.md) | cross-signing, what lives in `data/`, known gaps |
-| [Container quickstart](docs/container-quickstart.md) | `docker pull aguegu/piagent-matrix:edge` — nothing to a verified bot in six steps, moving an existing one in, and the failures both actually hit |
-| [In a container](docs/containerization.md) | why it is shaped that way: base image, what must survive, and what happens to cron |
+
+**Using it**
+
+| | |
+| --- | --- |
+| [Commands](docs/commands.md) | what each command does, and why the main room holds the controls |
+| [The main room](docs/main-room.md) | how the bot adopts a control channel, checks it, and repairs it |
+| [Spools](docs/spools.md) | the outbox (text to post) and the inbox (work to do) |
+| [Extending the agent](docs/extending.md) | extensions, skills, prompt templates, and the shipped `AGENTS.md` |
+| [More than one bot in a room](docs/multi-bot.md) | `m.notice`, and bounding a run of bots answering bots |
+
+**Why it is like that**
+
+| | |
+| --- | --- |
+| [In a container](docs/containerization.md) | base image, what must survive, and where the scheduler ended up after two wrong answers |
 | [pi integration](docs/pi-integration.md) | pi API notes and the behaviour that is easy to get wrong |
 | [SECURITY.md](SECURITY.md) | blast radius, and the dependency advisories |
 | [Releases](RELEASES.md) · [blog](docs/blog/) | what changed, and a few things worth writing up |
