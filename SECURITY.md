@@ -101,82 +101,84 @@ README.
 
 ## Known dependency advisories
 
-`npm audit` names 12 packages, which overstates it: **7 carry advisories** and
-5 are listed only because they depend on one. The pass-through names are
-`matrix-bot-sdk` itself, `express`, `body-parser`, `request-promise` and
-`request-promise-core` — each with zero advisories of its own.
+`npm audit` names 8 packages: **5 carry advisories** — 7 of them, 1 critical,
+1 high, 5 moderate — and 3 are listed only for depending on one
+(`matrix-bot-sdk` itself, `request-promise`, `request-promise-core`).
 
-The 11 real advisories (3 critical, 1 high, 7 moderate) have **two** root
-causes, both under `matrix-bot-sdk`, and none is currently fixable:
+All 7 have a single root cause, and it is the one that genuinely cannot be
+fixed from here:
 
 ```
-matrix-bot-sdk -> request (deprecated 2020) -> form-data, qs, tough-cookie, uuid
-matrix-bot-sdk -> express 4                 -> body-parser, morgan, proxy-addr
+matrix-bot-sdk -> request (deprecated 2020) -> form-data, qs 6.5.5, tough-cookie, uuid
 ```
 
-`request` was deprecated in 2020 and will not be patched, so those advisories
-report "No fix available". The express ones are fixable upstream in principle,
-but `matrix-bot-sdk@0.8.0` is the latest release and still declares both.
+`request` was deprecated in 2020 and will not be patched. It also pins
+`qs: ~6.5.2`, so the copy nested under it stays at 6.5.5 no matter what the
+rest of the tree does.
 
-**This list was wrong for a while, and the way it was wrong is worth keeping.**
-It said *all* the advisories were the `request` chain, and stopped being true
-twice over: express arrived without anyone noticing, and pi pinned a vulnerable
-`undici` — ten advisories, two of them high, including a TLS certificate
-validation bypass. The undici ones were real and *fixable*, and sat here
-unnoticed because the count was being read as a number rather than a set. They
-cleared when pi went to 1.1.0. Read the set, not the total.
+**Two things this section got wrong, both worth keeping.**
+
+It said all the advisories were the `request` chain, and that had quietly
+stopped being true twice: `express 4` arrived under the same parent with
+`proxy-addr` (critical) and `morgan`, and pi pinned a vulnerable `undici` — ten
+advisories, two high, one a TLS certificate validation bypass. Both went
+unnoticed because the figure was read as a count rather than a set.
+
+Then it said none were fixable, which was inherited from when the request chain
+*was* the whole story and never re-tested. Plain `npm audit fix` — no `--force`
+— cleared the entire express chain within semver: `express` 4.22.2 → 4.22.3,
+`proxy-addr` 2.0.7 → 2.0.8, `morgan` 1.11.0 → 1.12.1, `body-parser` 1.20.6 →
+1.20.8, and the hoisted `qs` 6.15.3 → 6.16.0. `matrix-bot-sdk` declares
+`express: ^4.18.2`, so a patched 4.x satisfies it; "matrix-bot-sdk ships
+express 4" was confused with "we are stuck on a vulnerable express". Run the
+dry-run before repeating a claim like that:
+
+```sh
+npm audit fix --dry-run
+```
 
 ### Assessed exposure
 
-The `request` chain, reached only as an HTTP *client* talking to one homeserver:
+All reached only as an HTTP *client* talking to one homeserver:
 
 | Advisory | Severity | Reachable here? |
 | --- | --- | --- |
 | `form-data` — unsafe boundary randomness; CRLF injection via unescaped multipart field names | critical / high | **No.** Both require multipart requests. `matrix-bot-sdk/lib` contains no multipart or form-data usage, and this bot sends text only — it never uploads media |
-| `qs` — arrayLimit bypasses, DoS via attacker-controlled `isBuffer` | moderate | **No.** All three affect servers parsing untrusted query strings. This is a client |
-| `request` — server-side request forgery | moderate | **Unlikely.** Requires an attacker to choose the request target. The bot requests only the homeserver in its configuration; a hostile homeserver redirecting it elsewhere is the residual case, which is the `tough-cookie` scenario below |
+| `qs` — arrayLimit bypass, DoS via attacker-controlled `isBuffer` | moderate | **No.** Both affect servers parsing untrusted query strings. This is a client. Only the 6.5.5 copy under `request` is affected; the hoisted one is patched |
+| `request` — server-side request forgery | moderate | **Unlikely.** Requires an attacker to choose the request target. The bot requests only the homeserver in its configuration; a hostile homeserver redirecting it elsewhere is the residual case, as with `tough-cookie` |
 | `tough-cookie` — prototype pollution | moderate | **Unlikely.** Requires a malicious server response; the bot talks to one homeserver you control |
 | `uuid` — missing buffer bounds check in v3/v5/v6 | moderate | **No.** Only when a `buf` argument is passed; nothing here does |
 
-The express chain, which is **never instantiated**:
+The whole `request` chain is about 730 KB, so this is an *old* dependency rather
+than a large one.
 
-| Advisory | Severity | Reachable here? |
-| --- | --- | --- |
-| `proxy-addr` — IP spoofing via IPv4-mapped IPv6 trust subnet | critical | **No.** Express's trust-proxy handling, which requires an HTTP server receiving requests |
-| `morgan` — log forging and log injection via unescaped separators and quotes | moderate | **No.** Express request-logging middleware, reached only by a running server |
+### Why these are not "fixed"
 
-`matrix-bot-sdk` ships express for its appservice and webhook features. This bot
-uses none of them: it is a `MatrixClient` that syncs outbound. Checked rather
-than assumed — there is no reference to `appservice`, `webhook`, `express`,
-`.listen(` or `createServer` anywhere in `src/` or `scripts/`, and the running
-container holds no listening socket of its own (the only entry in
-`/proc/net/tcp` is Docker's embedded DNS resolver at `127.0.0.11`).
-
-That is the whole assessment for those two: an advisory in a server framework
-that never serves is unreachable, and would become reachable the moment this
-bot grew a webhook endpoint.
-
-### Why it is not "fixed"
-
-- `npm audit fix --force` resolves this by downgrading or replacing
+- There is nothing to upgrade to. `request` is abandoned and pins its own
+  dependencies' majors.
+- `npm audit fix --force` resolves it by downgrading or replacing
   `matrix-bot-sdk`, which is the whole E2EE stack. Do not run it.
 - An `overrides` entry forcing newer `form-data`/`qs` is possible, but `request`
   pins those majors deliberately. That trades an unreachable advisory for a real
   risk of breaking the HTTP layer carrying encrypted traffic.
 
-The genuine fix is upstream: `matrix-bot-sdk` dropping `request` and moving off
-express 4.
+The genuine fix is upstream: `matrix-bot-sdk` dropping `request`.
 
 ### What would change this assessment
 
 - This bot gaining media upload, which would exercise the `form-data` multipart
   path and make that critical advisory reachable.
 - This bot gaining any HTTP endpoint — a webhook, a health check, an appservice
-  — which would instantiate express and make `proxy-addr` and `morgan` live.
+  — which would instantiate the express that `matrix-bot-sdk` ships and this bot
+  never starts. There is no reference to `appservice`, `webhook`, `express`,
+  `.listen(` or `createServer` in `src/` or `scripts/`, and a running container
+  owns no listening socket; the sole entry in `/proc/net/tcp` is Docker's
+  embedded DNS at `127.0.0.11`.
 - Pointing the bot at a homeserver you do not control, which raises the
   `tough-cookie` and `request` SSRF exposure.
 - `matrix-bot-sdk` publishing a release without `request` — at which point
   upgrade.
-- **A new name appearing in the list.** The two chains above are what is
-  assessed; anything else is unassessed by definition. `npm audit` after a
-  dependency bump is worth reading by package name, not by count.
+- **A new name appearing in the list.** What is above is what is assessed;
+  anything else is unassessed by definition. After any dependency change, read
+  `npm audit` by package name rather than by count, and try `npm audit fix
+  --dry-run` rather than assuming nothing moves.
