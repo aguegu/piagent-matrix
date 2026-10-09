@@ -171,7 +171,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model, thinking level, context size, build, uptime and extensions |
+| `.info` | any room | Shows the model, thinking level, context size, the bot and pi builds, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.compact` | any room | Summarises this room's history so the session carries less of it |
 | `.session` | any room | What this room's session has cost: messages, tokens, money |

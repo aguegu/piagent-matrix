@@ -22,6 +22,7 @@ import {
   createAgentSession,
   ModelRuntime,
   SessionManager,
+  VERSION as PI_VERSION,
 } from "@earendil-works/pi-coding-agent";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -795,6 +796,30 @@ export class AgentManager {
     this.sessions.clear();
   }
 }
+
+/**
+ * Which pi this bot is running on.
+ *
+ * Read from the module rather than from its package.json, for the reason
+ * `BUILD` is frozen at import in version.js: the question is what is loaded,
+ * not what is installed. A bot upgraded but not restarted should keep naming
+ * the version it is actually running.
+ *
+ * pi has not always exported `VERSION`, and the point of the line is to say
+ * what is running — so saying the version is unavailable is a better answer
+ * than printing `pi undefined`.
+ */
+export function describeAgentBuild(version) {
+  return version ? `pi ${version}` : "pi (version not reported)";
+}
+
+/**
+ * This process's agent build, read once at import — the same reasoning as
+ * `BUILD`, and split from the function above so the absent case is reachable
+ * from a test. A default parameter would have swallowed it: `undefined` is
+ * precisely what an older pi hands over, and precisely what a default fills in.
+ */
+export const AGENT_BUILD = describeAgentBuild(PI_VERSION);
 
 /**
  * A readable name for a loaded extension.

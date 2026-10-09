@@ -5,7 +5,7 @@ belong to the main room** — see below.
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| `.info` | any room | Shows the model, thinking level, context size, build, uptime and extensions |
+| `.info` | any room | Shows the model, thinking level, context size, the bot and pi builds, uptime and extensions |
 | `.reload` | main room | pi's `/reload` — re-reads extensions, skills, prompts and context files |
 | `.compact` | any room | Summarises this room's history so the session carries less of it |
 | `.session` | any room | What this room's session has cost: messages, tokens, money |
@@ -44,10 +44,16 @@ bot with one usable command.
 ## What each one does
 
 `.info` is the whole command surface of a working room: the model, the thinking
-level, the build — `piagent-matrix 0.2.2 (b15ea83)` — and when the process
-started, with how long it has been up. It reads; it changes nothing.
+level, the build — `piagent-matrix 0.3.1 (4b50386) on pi 1.1.0` — and when the
+process started, with how long it has been up. It reads; it changes nothing.
 
-The uptime is computed per call, unlike the build: the point of it is that it
+Two builds, because they move independently. This bot is released on its own
+schedule; pi is a dependency that can be upgraded without the version on the
+left changing at all. Both are read once at import rather than per call, so a
+deployment pulled but not restarted keeps naming what it is running rather than
+what is on disk — which is the whole point of the line.
+
+The uptime is computed per call, unlike the builds: the point of it is that it
 moves. Between them they answer the two questions asked of a deployment — which
 code is this, and did it actually restart when I restarted it.
 

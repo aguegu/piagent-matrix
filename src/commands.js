@@ -31,7 +31,7 @@
  * `everywhere` marks the ones a room other than the main room may use.
  */
 export const COMMANDS = {
-  info: { what: "Show the model, thinking level and build in use", everywhere: true },
+  info: { what: "Show the model, thinking level and the builds in use", everywhere: true },
   reload: { what: "pi's /reload — re-read extensions, skills, prompts and context files" },
   compact: { what: "Summarise this room's history so the session carries less of it", everywhere: true },
   session: { what: "What this room's session has cost so far: messages, tokens, money", everywhere: true },

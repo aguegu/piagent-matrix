@@ -26,7 +26,7 @@ import {
 import { StoreType } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import { withTyping } from "./status.js";
 import { renderMarkdown } from "./markdown.js";
-import { AgentManager, describeApiError } from "./agent.js";
+import { AGENT_BUILD, AgentManager, describeApiError } from "./agent.js";
 import { startOutbox } from "./outbox.js";
 import { startInbox } from "./inbox.js";
 import { parseCommand, helpText, mayCommand } from "./commands.js";
@@ -300,7 +300,11 @@ async function runCommand(command, { agent, client, roomId, sender }) {
         `Model: \`${model.current}\``,
         `Thinking: \`${thinking.current}\``,
         `Context: ${describeContextLine(agent.describeContext(roomId))}`,
-        `Build: \`${BUILD}\``,
+        // Two builds, because they move independently: this bot is released
+        // on its own schedule, and the agent underneath it is a dependency
+        // that can be upgraded without the version above changing at all.
+        // "Which pi is this running?" was unanswerable from a room until now.
+        `Build: \`${BUILD}\` on \`${AGENT_BUILD}\``,
         `Started: \`${describeStart()}\``,
         describeExtensionLine(agent.describeExtensions()),
       ].join("\n"),

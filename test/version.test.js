@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describeBuild, describeStart, readCommit, readVersion } from "../src/version.js";
+import { AGENT_BUILD, describeAgentBuild } from "../src/agent.js";
 
 describe("naming the build", () => {
   let root;
@@ -91,5 +92,29 @@ describe("saying how long it has been up", () => {
     const first = describeStart(Date.now(), 10);
     const later = describeStart(Date.now(), 20);
     assert.notEqual(first, later);
+  });
+});
+
+describe("naming the agent underneath", () => {
+  // The bot's version and pi's move independently: this is released on its
+  // own schedule, and pi is a dependency that can be upgraded without the
+  // number above changing. "Which pi is this running?" had no answer from a
+  // room, which is the question a major bump makes people ask.
+
+  it("names the version pi reports", () => {
+    assert.equal(describeAgentBuild("1.1.0"), "pi 1.1.0");
+  });
+
+  it("says so rather than printing undefined when pi does not report one", () => {
+    // pi has not always exported VERSION. `pi undefined` in a room would read
+    // as a bug in this bot; the absence is the honest answer.
+    assert.equal(describeAgentBuild(undefined), "pi (version not reported)");
+    assert.equal(describeAgentBuild(""), "pi (version not reported)");
+  });
+
+  it("reports a real version for the pi actually loaded", () => {
+    // The guard against the wiring rotting: AGENT_BUILD is read at import
+    // from the module, so this fails if the export is renamed or dropped.
+    assert.match(AGENT_BUILD, /^pi \d+\.\d+\.\d+/);
   });
 });
