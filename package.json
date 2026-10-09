@@ -20,6 +20,6 @@
     "sanitize-html": "^2.18.0"
   },
   "devDependencies": {
-    "matrix-js-sdk": "^42.2.0"
+    "matrix-js-sdk": "^43.0.0"
   }
 }
