@@ -101,30 +101,60 @@ README.
 
 ## Known dependency advisories
 
-`npm audit` reports 8 advisories (2 critical, 6 moderate). **All 8 have a single
-root cause** and none are currently fixable:
+`npm audit` names 12 packages, which overstates it: **7 carry advisories** and
+5 are listed only because they depend on one. The pass-through names are
+`matrix-bot-sdk` itself, `express`, `body-parser`, `request-promise` and
+`request-promise-core` — each with zero advisories of its own.
+
+The 11 real advisories (3 critical, 1 high, 7 moderate) have **two** root
+causes, both under `matrix-bot-sdk`, and none is currently fixable:
 
 ```
 matrix-bot-sdk -> request (deprecated 2020) -> form-data, qs, tough-cookie, uuid
+matrix-bot-sdk -> express 4                 -> body-parser, morgan, proxy-addr
 ```
 
-`request` was deprecated in 2020 and will not be patched, so every advisory
-below reports "No fix available".
+`request` was deprecated in 2020 and will not be patched, so those advisories
+report "No fix available". The express ones are fixable upstream in principle,
+but `matrix-bot-sdk@0.8.0` is the latest release and still declares both.
 
-**Upgrading does not help.** `matrix-bot-sdk@0.8.0` is the latest release, and
-`matrix-bot-sdk@latest` still declares `request: ^2.88.2`.
+**This list was wrong for a while, and the way it was wrong is worth keeping.**
+It said *all* the advisories were the `request` chain, and stopped being true
+twice over: express arrived without anyone noticing, and pi pinned a vulnerable
+`undici` — ten advisories, two of them high, including a TLS certificate
+validation bypass. The undici ones were real and *fixable*, and sat here
+unnoticed because the count was being read as a number rather than a set. They
+cleared when pi went to 1.1.0. Read the set, not the total.
 
 ### Assessed exposure
 
+The `request` chain, reached only as an HTTP *client* talking to one homeserver:
+
 | Advisory | Severity | Reachable here? |
 | --- | --- | --- |
-| `form-data` — unsafe boundary randomness; CRLF injection via multipart field names | critical | **No.** Both require multipart requests. `matrix-bot-sdk/lib` contains no multipart or form-data usage, and this bot sends text only — it never uploads media |
-| `qs` — arrayLimit bypass, DoS via memory exhaustion | moderate | **No.** Affects servers parsing untrusted query strings. This is an HTTP client |
+| `form-data` — unsafe boundary randomness; CRLF injection via unescaped multipart field names | critical / high | **No.** Both require multipart requests. `matrix-bot-sdk/lib` contains no multipart or form-data usage, and this bot sends text only — it never uploads media |
+| `qs` — arrayLimit bypasses, DoS via attacker-controlled `isBuffer` | moderate | **No.** All three affect servers parsing untrusted query strings. This is a client |
+| `request` — server-side request forgery | moderate | **Unlikely.** Requires an attacker to choose the request target. The bot requests only the homeserver in its configuration; a hostile homeserver redirecting it elsewhere is the residual case, which is the `tough-cookie` scenario below |
 | `tough-cookie` — prototype pollution | moderate | **Unlikely.** Requires a malicious server response; the bot talks to one homeserver you control |
 | `uuid` — missing buffer bounds check in v3/v5/v6 | moderate | **No.** Only when a `buf` argument is passed; nothing here does |
 
-The entire `request` chain is about 730 KB, so this is an *old* dependency
-rather than a large one.
+The express chain, which is **never instantiated**:
+
+| Advisory | Severity | Reachable here? |
+| --- | --- | --- |
+| `proxy-addr` — IP spoofing via IPv4-mapped IPv6 trust subnet | critical | **No.** Express's trust-proxy handling, which requires an HTTP server receiving requests |
+| `morgan` — log forging and log injection via unescaped separators and quotes | moderate | **No.** Express request-logging middleware, reached only by a running server |
+
+`matrix-bot-sdk` ships express for its appservice and webhook features. This bot
+uses none of them: it is a `MatrixClient` that syncs outbound. Checked rather
+than assumed — there is no reference to `appservice`, `webhook`, `express`,
+`.listen(` or `createServer` anywhere in `src/` or `scripts/`, and the running
+container holds no listening socket of its own (the only entry in
+`/proc/net/tcp` is Docker's embedded DNS resolver at `127.0.0.11`).
+
+That is the whole assessment for those two: an advisory in a server framework
+that never serves is unreachable, and would become reachable the moment this
+bot grew a webhook endpoint.
 
 ### Why it is not "fixed"
 
@@ -134,13 +164,19 @@ rather than a large one.
   pins those majors deliberately. That trades an unreachable advisory for a real
   risk of breaking the HTTP layer carrying encrypted traffic.
 
-The genuine fix is upstream: `matrix-bot-sdk` dropping `request`.
+The genuine fix is upstream: `matrix-bot-sdk` dropping `request` and moving off
+express 4.
 
 ### What would change this assessment
 
 - This bot gaining media upload, which would exercise the `form-data` multipart
-  path and make the critical advisory reachable.
+  path and make that critical advisory reachable.
+- This bot gaining any HTTP endpoint — a webhook, a health check, an appservice
+  — which would instantiate express and make `proxy-addr` and `morgan` live.
 - Pointing the bot at a homeserver you do not control, which raises the
-  `tough-cookie` exposure.
+  `tough-cookie` and `request` SSRF exposure.
 - `matrix-bot-sdk` publishing a release without `request` — at which point
   upgrade.
+- **A new name appearing in the list.** The two chains above are what is
+  assessed; anything else is unassessed by definition. `npm audit` after a
+  dependency bump is worth reading by package name, not by count.
