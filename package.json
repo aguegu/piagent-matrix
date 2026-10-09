@@ -12,7 +12,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^1.1.0",
     "config": "^5.0.1",
     "dotenv-flow": "^4.1.0",
     "markdown-it": "^15.0.2",
