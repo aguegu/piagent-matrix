@@ -106,6 +106,7 @@ message is the confirmation the whole setup worked. Send it a message, or
 | `npm test` | `node --test` over `test/**/*.test.js` |
 | `npm run cross-sign [DEVICE_ID]` | Cross-sign the bot's device |
 | `npm run doctor [--json]` | Check whether this deployment is ready, and name what is not |
+| `npm run doctor -- --preflight` | List the inputs a deployment needs, before building one |
 
 ## When a fresh install goes wrong
 

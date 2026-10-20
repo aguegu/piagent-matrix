@@ -126,17 +126,30 @@ things, and they are the ones only you can:
 - **decide `MATRIX_ALLOWED_USERS`**, which means knowing who you are;
 - **invite the bot to a room**, from your own client.
 
-A good agent will do everything else and then stop and ask for those, rather
-than building two thirds of a bot and reporting success. What it checks its
-work with is the same thing you would:
+A good agent will ask for those **first**, rather than building two thirds of
+a bot and discovering the gap at `docker compose up`. There is a mode for
+exactly that, which needs no deployment to exist yet:
+
+```sh
+docker run --rm aguegu/piagent-matrix:latest node /app/scripts/doctor.js --preflight --json
+```
+
+It reports every input as a field — whether it is set, whether it is required,
+whether it is a secret and so must not be echoed back, and where it comes
+from. Everything on that list says `"from": "human"`, which is the point.
+Exit is non-zero while anything required is missing, so an agent can loop:
+ask, write `.env`, re-run, proceed.
+
+Once it is running, the same script without `--preflight` checks the result —
+configuration, volumes, device, provider, allowlist, scheduler, cross-signing —
+and exits non-zero when something is actually wrong, so each step is verified
+rather than assumed:
 
 ```sh
 docker compose exec bot node /app/scripts/doctor.js --json
 ```
 
-which exits non-zero when something is actually wrong and names it, so each
-step can be verified rather than assumed. See
-[checking it](docs/container-quickstart.md#checking-it).
+See [checking it](docs/container-quickstart.md#checking-it).
 
 ## It is still pi
 

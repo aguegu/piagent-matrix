@@ -156,3 +156,81 @@ describe("the readiness check", () => {
     }
   });
 });
+
+/** Preflight needs no deployment at all — that is the point of it. */
+async function preflight(extra = {}) {
+  // Genuinely bare, which takes more than an empty env object. config/default.js
+  // resolves .env from beside the *code* rather than the working directory —
+  // deliberately, so a container finds it — so the checkout's own .env.local
+  // is loaded no matter what this process inherits. dotenv-flow does not
+  // overwrite a key that is already present, and an empty string counts as
+  // present, so setting each to "" is what actually clears them. That is also
+  // the real shape of a half-written .env, which is when preflight is useful.
+  const bare = {
+    PATH: process.env.PATH, HOME: process.env.HOME, NODE_CONFIG_DIR: join(REPO, "config"),
+    MATRIX_HOMESERVER: "", MATRIX_USER_ID: "", MATRIX_PASSWORD: "",
+    MATRIX_ALLOWED_USERS: "", MATRIX_RECOVERY_KEY: "",
+    ...extra,
+  };
+  try {
+    const { stdout } = await execFileAsync(process.execPath, [DOCTOR, "--preflight", "--json"], { env: bare });
+    return { code: 0, report: JSON.parse(stdout) };
+  } catch (err) {
+    return { code: err.code, report: JSON.parse(err.stdout) };
+  }
+}
+
+describe("the preflight form", () => {
+  it("names every required input when nothing is configured", async () => {
+    const { code, report } = await preflight();
+    assert.equal(report.ready, false);
+    assert.equal(code, 1, "an agent loops on this until it exits 0");
+    assert.deepEqual(report.missing.sort(), [
+      "MATRIX_ALLOWED_USERS", "MATRIX_HOMESERVER", "MATRIX_PASSWORD", "MATRIX_USER_ID",
+    ]);
+  });
+
+  it("marks secrets, so a caller knows not to echo the value back", async () => {
+    const { report } = await preflight();
+    const secret = report.fields.filter((f) => f.secret).map((f) => f.key);
+    assert.ok(secret.includes("MATRIX_PASSWORD"));
+    assert.ok(secret.includes("MATRIX_RECOVERY_KEY"));
+    assert.ok(!secret.includes("MATRIX_HOMESERVER"), "a server URL is not a secret");
+  });
+
+  it("says a human must supply every one of them", async () => {
+    // The whole reason this mode exists: none of it can be automated, so an
+    // agent should ask up front rather than discover it at `up -d`.
+    const { report } = await preflight();
+    assert.ok(report.fields.every((f) => f.from === "human"));
+  });
+
+  it("carries a how for each, not just a name", async () => {
+    const { report } = await preflight();
+    for (const f of report.fields) {
+      assert.ok(f.how && f.how.length > 20, `${f.key} needs to say where it comes from`);
+      assert.ok(f.what, `${f.key} needs to say what it is`);
+    }
+  });
+
+  it("recognises any provider key by suffix, and reports the one found", async () => {
+    const { report } = await preflight({ ANTHROPIC_API_KEY: "sk-test" });
+    const key = report.fields.find((f) => f.key === "ANTHROPIC_API_KEY");
+    assert.ok(key, "the wildcard resolves to the variable actually set");
+    assert.equal(key.present, true);
+  });
+
+  it("is ready once the four required inputs are present", async () => {
+    const { code, report } = await preflight({
+      MATRIX_HOMESERVER: "https://matrix.invalid",
+      MATRIX_USER_ID: "@b:invalid",
+      MATRIX_PASSWORD: "x",
+      MATRIX_ALLOWED_USERS: "@you:invalid",
+    });
+    assert.equal(report.ready, true);
+    assert.equal(code, 0);
+    // Still optional, still reported — a bot without one works, with every
+    // message flagged as sent by an unverified device.
+    assert.equal(report.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").present, false);
+  });
+});

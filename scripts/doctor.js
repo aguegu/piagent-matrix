@@ -29,7 +29,87 @@ import { join, resolve } from "node:path";
 import config from "config";
 
 const JSON_OUT = process.argv.includes("--json");
+const PREFLIGHT = process.argv.includes("--preflight");
 const results = [];
+
+// --- preflight ---------------------------------------------------------------
+//
+// A different question from the rest of this file. The checks below ask
+// whether a deployment that exists is healthy; this asks whether there is
+// enough information to build one, and answers before anything has been
+// created — no data directory, no container, nothing to inspect.
+//
+// It exists because of where the agent-driven path actually stalls. Four of
+// these cannot be obtained by any amount of automation: someone has to
+// register the bot's Matrix account, turn on recovery in Element so that
+// secret storage exists at all, say who is allowed to drive the agent, and
+// invite the bot to a room. An agent that discovers that at `up -d` has
+// already built two thirds of a bot. Asked first, it is a short list of
+// questions.
+//
+// `secret` is marked so a caller knows not to echo the value back; `from`
+// says who can supply it, which is what turns this into a form rather than a
+// list of complaints.
+
+const INPUTS = [
+  {
+    key: "MATRIX_HOMESERVER", required: true, secret: false, from: "human",
+    what: "Base URL of the homeserver the bot logs in to",
+    how: "e.g. https://matrix.example.org — the server your own account is on",
+  },
+  {
+    key: "MATRIX_USER_ID", required: true, secret: false, from: "human",
+    what: "The bot's own Matrix user id",
+    how: "Register a separate account for it, not your own and not another bot's: @mybot:matrix.example.org",
+  },
+  {
+    key: "MATRIX_PASSWORD", required: true, secret: true, from: "human",
+    what: "That account's password, for the first login only",
+    how: "After the first start the bot stores a device token and this can be emptied",
+  },
+  {
+    key: "MATRIX_ALLOWED_USERS", required: true, secret: false, from: "human",
+    what: "Who may drive the agent — comma separated user ids",
+    how: "Your own user id. Empty means everyone, and the agent runs shell commands with no approval gate",
+  },
+  {
+    key: "MATRIX_RECOVERY_KEY", required: false, secret: true, from: "human",
+    what: "Unlocks secret storage so the bot's device can be cross-signed",
+    how: "Log into the bot's account in Element once and turn on recovery; that is what creates the secret storage, and it hands you this key. Without it the bot works, but every message it sends is flagged as sent by an unverified device",
+  },
+  {
+    key: "*_API_KEY", required: false, secret: true, from: "human",
+    what: "A model provider credential, if you are not logging in interactively",
+    how: "Either set one here (e.g. ANTHROPIC_API_KEY) or run `docker compose run --rm bot pi` and use /login, which writes data/pi/auth.json instead",
+  },
+];
+
+if (PREFLIGHT) {
+  const provider = Object.keys(process.env).find((k) => /_API_KEY$/.test(k) && process.env[k]);
+  const fields = INPUTS.map((i) => {
+    const value = i.key === "*_API_KEY" ? (provider ? process.env[provider] : "") : process.env[i.key];
+    return { ...i, ...(provider && i.key === "*_API_KEY" ? { key: provider } : {}), present: Boolean(value?.trim()) };
+  });
+  const missing = fields.filter((f) => f.required && !f.present);
+
+  if (JSON_OUT) {
+    console.log(JSON.stringify({ ready: missing.length === 0, missing: missing.map((f) => f.key), fields }, null, 2));
+  } else {
+    for (const f of fields) {
+      const mark = f.present ? "ok  " : f.required ? "NEED" : "opt ";
+      console.log(`${mark}  ${f.key}${f.secret ? "  (secret)" : ""}: ${f.what}`);
+      if (!f.present) console.log(`        → ${f.how}`);
+    }
+    console.log(
+      missing.length === 0
+        ? "\nAll required inputs present. Nothing here can be obtained without you except by asking."
+        : `\nMISSING ${missing.length}: ${missing.map((f) => f.key).join(", ")}`,
+    );
+    // The one step no variable covers, and the one most often forgotten.
+    console.log("\nStill yours to do after it starts: invite the bot to a room from an allowlisted account.");
+  }
+  process.exit(missing.length === 0 ? 0 : 1);
+}
 
 /** @param {"ok"|"warn"|"fail"} status */
 function record(name, status, detail, fix) {

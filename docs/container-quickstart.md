@@ -153,6 +153,32 @@ flagging the session.
 
 ## Checking it
 
+Before building anything, there is a mode that asks whether you have what a
+deployment needs. It inspects no files and requires no container:
+
+```sh
+docker run --rm aguegu/piagent-matrix:latest node /app/scripts/doctor.js --preflight
+```
+
+```
+NEED  MATRIX_HOMESERVER: Base URL of the homeserver the bot logs in to
+NEED  MATRIX_USER_ID: The bot's own Matrix user id
+NEED  MATRIX_PASSWORD  (secret): That account's password, for the first login only
+NEED  MATRIX_ALLOWED_USERS: Who may drive the agent — comma separated user ids
+opt   MATRIX_RECOVERY_KEY  (secret): Unlocks secret storage so the bot's device can be cross-signed
+
+MISSING 4: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_PASSWORD, MATRIX_ALLOWED_USERS
+
+Still yours to do after it starts: invite the bot to a room from an allowlisted account.
+```
+
+Every one of those is something only a person can supply — there is no account
+to register, no recovery to turn on and no allowlist to decide without you —
+which is why it is worth asking before step 2 rather than after step 4. With
+`--json` each field carries `required`, `secret` and `from`, so a caller knows
+which to ask for and which not to print.
+
+
 ```sh
 docker compose exec bot node /app/scripts/doctor.js
 ```
