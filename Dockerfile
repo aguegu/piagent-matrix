@@ -68,7 +68,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /usr/local/bin/
 # is, what it is, and which platform it can possibly run on. The crypto
 # binding is linux-x64-gnu with no musl build and supercronic is pinned to
 # amd64, so this is an amd64 image and says so.
-ARG VERSION=0.3.1-dev
+ARG VERSION=0.3.2-dev
 LABEL org.opencontainers.image.title="piagent-matrix" \
       org.opencontainers.image.description="A Matrix bot that fronts the pi coding agent" \
       org.opencontainers.image.source="https://github.com/aguegu/piagent-matrix" \

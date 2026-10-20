@@ -1,5 +1,13 @@
 # Releases
 
+## 0.3.2 (in progress)
+
+### New Features
+
+* **pi 1.1.0 → 1.3.0.** A minor release that nonetheless carries a Breaking Changes section, and one entry sits beside this bot's concurrency model: a session now counts as busy *while a run starts*, so `pi.sendMessage()` queues into the starting run rather than failing with "Agent is already processing". This bot serializes per room itself and does not rely on that, but `agent-queue.test.js` proves the guarantee against a *fake* session, which by construction cannot see pi's real behaviour change — so it was checked against the real one: two messages delivered to a single room at once each owned a complete run and got their own reply, neither lost. The rest of the surface was exercised in the built image too — a month-old transcript resumed under its own session id, an MCP tool call returning, a compaction taking 128,736 tokens to 30,026, and both extensions loading and running with none failed, which is what says the `before_agent_start` union change did not break them. Session format is unchanged at version 3, so nothing migrates
+* **matrix-js-sdk 43 → 44.** All three breaking changes are MatrixRTC — deprecated APIs removed, "oldest membership" transport selection gone, LiveKit transports no longer distinguished from transport configs — and none of it is reachable from `scripts/cross-sign.js`. The exposure is what it was at the last major: the two deep imports into `lib/`. Both still resolve, and the script ran to completion against the live host bot, taking the existing cross-signing identity rather than minting one, printing `SUCCESS`, and logging out its throwaway device — the account's device list identical before and after
+* **markdown-it 15.0.3, sanitize-html 2.18.1.** Both patch releases in the message rendering path; a hostile sample still comes back with the script tag and the `img onerror` escaped and the `javascript:` link refused. `npm audit` is unchanged at 8 names, 5 carrying 7 advisories, still the `request` chain SECURITY.md describes — no drift to re-assess this time
+
 ## 0.3.1 (2026-10-09)
 
 ### New Features
