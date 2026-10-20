@@ -126,6 +126,9 @@ things, and they are the ones only you can:
 - **decide `MATRIX_ALLOWED_USERS`**, which means knowing who you are;
 - **invite the bot to a room**, from your own client.
 
+It also needs **a model provider credential**. `pi`'s interactive `/login` is a
+terminal UI, so an agent cannot use it — set an API key in `.env` instead.
+
 A good agent will ask for those **first**, rather than building two thirds of
 a bot and discovering the gap at `docker compose up`. There is a mode for
 exactly that, which needs no deployment to exist yet:

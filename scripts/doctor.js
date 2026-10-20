@@ -78,9 +78,14 @@ const INPUTS = [
     how: "Log into the bot's account in Element once and turn on recovery; that is what creates the secret storage, and it hands you this key. Without it the bot works, but every message it sends is flagged as sent by an unverified device",
   },
   {
-    key: "*_API_KEY", required: false, secret: true, from: "human",
-    what: "A model provider credential, if you are not logging in interactively",
-    how: "Either set one here (e.g. ANTHROPIC_API_KEY) or run `docker compose run --rm bot pi` and use /login, which writes data/pi/auth.json instead",
+    // Required, despite there being another way. `pi /login` is a terminal UI,
+    // so it is available to a person and not to an agent — and preflight
+    // exists for the caller that cannot use it. Marking this optional let a
+    // dry run reach "All required inputs present" on a deployment that then
+    // failed its first message with no provider configured.
+    key: "*_API_KEY", required: true, secret: true, from: "human",
+    what: "A model provider credential",
+    how: "Set one here, e.g. ANTHROPIC_API_KEY. A person at a terminal can instead run `docker compose run --rm bot pi` and use /login, which writes data/pi/auth.json — but that needs a TTY, so it is not a route an agent can take",
   },
 ];
 

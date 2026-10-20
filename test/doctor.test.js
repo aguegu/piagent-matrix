@@ -186,7 +186,7 @@ describe("the preflight form", () => {
     assert.equal(report.ready, false);
     assert.equal(code, 1, "an agent loops on this until it exits 0");
     assert.deepEqual(report.missing.sort(), [
-      "MATRIX_ALLOWED_USERS", "MATRIX_HOMESERVER", "MATRIX_PASSWORD", "MATRIX_USER_ID",
+      "*_API_KEY", "MATRIX_ALLOWED_USERS", "MATRIX_HOMESERVER", "MATRIX_PASSWORD", "MATRIX_USER_ID",
     ]);
   });
 
@@ -220,17 +220,34 @@ describe("the preflight form", () => {
     assert.equal(key.present, true);
   });
 
-  it("is ready once the four required inputs are present", async () => {
+  it("counts a provider key as required, because /login needs a terminal", async () => {
+    // Found by walking a fresh deployment: with this optional, preflight said
+    // "all required inputs present" and the deployment then failed its first
+    // message with no provider. `pi /login` is a real alternative for a person
+    // at a terminal and no route at all for the caller preflight is written
+    // for, so optional was the wrong answer.
     const { code, report } = await preflight({
       MATRIX_HOMESERVER: "https://matrix.invalid",
       MATRIX_USER_ID: "@b:invalid",
       MATRIX_PASSWORD: "x",
       MATRIX_ALLOWED_USERS: "@you:invalid",
     });
-    assert.equal(report.ready, true);
-    assert.equal(code, 0);
-    // Still optional, still reported — a bot without one works, with every
-    // message flagged as sent by an unverified device.
-    assert.equal(report.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").present, false);
+    assert.equal(report.ready, false, "no provider credential means it cannot be finished");
+    assert.deepEqual(report.missing, ["*_API_KEY"]);
+
+    const withKey = await preflight({
+      MATRIX_HOMESERVER: "https://matrix.invalid",
+      MATRIX_USER_ID: "@b:invalid",
+      MATRIX_PASSWORD: "x",
+      MATRIX_ALLOWED_USERS: "@you:invalid",
+      ANTHROPIC_API_KEY: "sk-test",
+    });
+    const { code: code2, report: report2 } = withKey;
+    assert.equal(report2.ready, true);
+    assert.equal(code2, 0);
+    // The recovery key stays optional for real: a bot without one works, with
+    // every message flagged as sent by an unverified device.
+    assert.equal(report2.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").present, false);
+    assert.equal(report2.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").required, false);
   });
 });
