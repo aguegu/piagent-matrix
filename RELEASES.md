@@ -1,5 +1,13 @@
 # Releases
 
+## 0.3.3 (in progress)
+
+### New Features
+
+* **A readiness check** (`scripts/doctor.js`, `npm run doctor`, `--json`). "Did it work" has meant grepping the startup log for `Crypto ready=true`, which says nothing at all when it is absent. One pass now covers configuration, the data volume and both spools, the device, the model provider, the agent's installed instructions, the allowlist, the scheduler, the instance lock and cross-signing — naming what is wrong and what to do about it, exiting non-zero only on a real failure so a caller can branch on that alone. Two rules it keeps, both from constraints this project already had: it is **read only and safe against a running bot**, so cross-signing is asked of the homeserver over HTTP rather than read from the crypto store, which only one process may open; and probing causes **no side effects**, so the provider is judged by inspecting `auth.json` rather than by `ModelRuntime.create()`, which would answer the question and create an empty `auth.json` in the course of answering it
+* **The lock check, which took three attempts**, and is worth recording because each wrong version was confidently wrong. It first called a lock *stale* while the bot was running — pids are per namespace, and it had been run in a throwaway container; reported that way it invites starting a second bot on one crypto store, which is the Megolm failure this project keeps guarding against. The fix then claimed the opposite in the same container, because `process.kill(pid, 0)` succeeds for thread ids too and node's own libuv threadpool occupies the low numbers in a fresh one. It now reads `/proc/<pid>/cmdline`, which is what `src/instance-lock.js` does for exactly that reason, and when it cannot see the pid it says so rather than guessing — not knowing is a different state from knowing it is dead
+* **Deploying it with an agent**, in the README. The quickstart was already written to be followed step by step; what was missing was saying so, and being honest about the boundary. An agent can make the directory, write `compose.yml` and `.env`, pull, start, cross-sign and verify its own work. It cannot create the Matrix account, turn on recovery in Element (which is what creates the secret storage cross-signing reads), decide `MATRIX_ALLOWED_USERS`, or invite the bot to a room. Those four are named so a deployment stops and asks rather than reporting two thirds of a bot as success — and the readiness check is what lets each step be verified instead of assumed
+
 ## 0.3.2 (2026-10-20)
 
 ### New Features
