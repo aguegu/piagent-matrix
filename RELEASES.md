@@ -1,6 +1,6 @@
 # Releases
 
-## 0.3.3 (in progress)
+## 0.3.3 (2026-10-20)
 
 ### New Features
 
