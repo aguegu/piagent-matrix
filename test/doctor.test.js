@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,14 @@ function makeDeployment({ token = true, auth = true } = {}) {
   // `{}` is pi's "created but never configured" state, so an empty object is
   // the honest way to express "no provider" — not an absent file.
   writeFileSync(join(data, "pi", "auth.json"), auth ? JSON.stringify({ fakeprovider: { apiKey: "x" } }) : "{}");
+
+  // parts-available is what ships; parts-enabled is the operator's copy. The
+  // enabled copy carries a 10-/20- prefix and no managed marker, which is what
+  // seedEnabled produces.
+  mkdirSync(join(data, "parts-available"), { recursive: true });
+  mkdirSync(join(data, "parts-enabled"), { recursive: true });
+  writeFileSync(join(data, "parts-available", "demo.md"), "<!-- managed -->\n\n## Demo\n\ncurrent text.\n");
+  writeFileSync(join(data, "parts-enabled", "10-demo.md"), "## Demo\n\ncurrent text.\n");
   return { dir, data };
 }
 
@@ -249,5 +257,76 @@ describe("the preflight form", () => {
     // every message flagged as sent by an unverified device.
     assert.equal(report2.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").present, false);
     assert.equal(report2.fields.find((f) => f.key === "MATRIX_RECOVERY_KEY").required, false);
+  });
+});
+
+describe("drift between an enabled section and what ships", () => {
+  // A copy in parts-enabled/ is the operator's and is never overwritten. The
+  // cost is silent staleness: one deployment spent six weeks telling its agent
+  // that a scheduled job runs in a different container, six weeks after that
+  // stopped being true, because no placeholder disappeared with the change and
+  // nothing else compared the two.
+
+  it("is quiet when the enabled copy matches what ships", async () => {
+    const { dir, data } = makeDeployment();
+    try {
+      const { report } = await run(data);
+      assert.equal(statusOf(report, "agent sections"), "ok");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when the shipped text changed after the copy was made", async () => {
+    const { dir, data } = makeDeployment();
+    try {
+      const shipped = join(data, "parts-available", "demo.md");
+      writeFileSync(shipped, "<!-- managed -->\n\n## Demo\n\nrewritten text.\n");
+      const later = new Date(Date.now() + 60_000);
+      utimesSync(shipped, later, later);
+
+      const { report } = await run(data);
+      const check = report.checks.find((c) => c.name === "agent sections");
+      assert.equal(check.status, "warn");
+      assert.match(check.detail, /behind what ships/);
+      assert.match(check.detail, /10-demo\.md/);
+      // A warning, never a failure: an edited copy is the whole point.
+      assert.equal(report.ready, true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not call a deliberate edit stale", async () => {
+    // Same difference, opposite direction. publishParts only rewrites when the
+    // shipped text actually changes, so an enabled copy newer than it is an
+    // edit rather than drift, and nagging about it would be wrong.
+    const { dir, data } = makeDeployment();
+    try {
+      const mine = join(data, "parts-enabled", "10-demo.md");
+      writeFileSync(mine, "## Demo\n\nmy own wording.\n");
+      const later = new Date(Date.now() + 60_000);
+      utimesSync(mine, later, later);
+
+      const { report } = await run(data);
+      const check = report.checks.find((c) => c.name === "agent sections");
+      assert.equal(check.status, "ok");
+      assert.match(check.detail, /1 edited/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a section of your own alone", async () => {
+    const { dir, data } = makeDeployment();
+    try {
+      writeFileSync(join(data, "parts-enabled", "30-mine.md"), "## Mine\n\nnothing ships this.\n");
+      const { report } = await run(data);
+      const check = report.checks.find((c) => c.name === "agent sections");
+      assert.equal(check.status, "ok");
+      assert.match(check.detail, /1 your own/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

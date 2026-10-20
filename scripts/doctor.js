@@ -24,7 +24,7 @@
 // it without parsing anything. Warnings do not fail: an empty allowlist is a
 // serious problem but not a reason to believe the bot will not start.
 
-import { existsSync, readFileSync, accessSync, constants } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, accessSync, constants } from "node:fs";
 import { join, resolve } from "node:path";
 import config from "config";
 
@@ -239,6 +239,67 @@ if (!existsSync(agentsMd)) {
       "a value was not supplied; check the startup log for which");
   } else {
     ok("agent instructions", `${agentsMd}, ${text.length} chars`);
+  }
+}
+
+// --- enabled sections, against what ships -------------------------------------
+//
+// A copy in parts-enabled/ is the operator's outright: the bot publishes the
+// shipped text to parts-available/ on every start and never touches an enabled
+// copy. That is the whole design, and its cost is silent drift — a bot can go
+// on reading a section written before the behaviour it describes changed.
+//
+// This happened. One deployment spent six weeks telling its agent to check a
+// heartbeat file that had been deleted, because its copy was seeded two hours
+// before the text was rewritten. The `{{placeholder}}` check above caught it
+// only because a *variable* disappeared with the mechanism; text that drifts
+// without one would go on unnoticed.
+//
+// So: compare, and warn rather than fail, because an edited copy is the point.
+// The direction is knowable — publishParts only writes when the shipped text
+// actually changes, so an available file newer than the enabled copy means
+// something shipped after yours was made, where the reverse is just an edit.
+
+const enabledDir = join(dataDir, "parts-enabled");
+const availableDir = join(dataDir, "parts-available");
+
+if (!existsSync(enabledDir)) {
+  ok("agent sections", "none enabled — AGENTS.md carries the template alone");
+} else {
+  const enabled = readdirSync(enabledDir).filter((n) => n.endsWith(".md")).sort();
+  const stale = [];
+  const edited = [];
+  const own = [];
+
+  for (const name of enabled) {
+    // Seeded copies carry a 10-/20- prefix for ordering; the shipped file does not.
+    const shipped = join(availableDir, name.replace(/^\d+-/, ""));
+    if (!existsSync(shipped)) {
+      own.push(name);
+      continue;
+    }
+    const mine = readFileSync(join(enabledDir, name), "utf8").trim();
+    const theirs = readFileSync(shipped, "utf8").replace(/^<!--[^>]*-->\s*/, "").trim();
+    if (mine === theirs) continue;
+
+    const mineAt = statSync(join(enabledDir, name)).mtime;
+    const theirsAt = statSync(shipped).mtime;
+    (theirsAt > mineAt ? stale : edited).push(
+      // To the minute: the drift that prompted this was two hours wide, and a
+      // date alone would have shown both sides as the same day.
+      `${name} (yours ${mineAt.toISOString().slice(0, 16).replace("T", " ")}, shipped ${theirsAt.toISOString().slice(0, 16).replace("T", " ")})`,
+    );
+  }
+
+  const parts = [`${enabled.length} enabled`];
+  if (own.length) parts.push(`${own.length} your own`);
+  if (edited.length) parts.push(`${edited.length} edited`);
+
+  if (stale.length) {
+    warn("agent sections", `${parts.join(", ")}; ${stale.length} behind what ships — ${stale.join("; ")}`,
+      `the shipped text changed after your copy was made. Compare with ${availableDir}/ and copy across if you did not mean to customise it`);
+  } else {
+    ok("agent sections", parts.join(", "));
   }
 }
 

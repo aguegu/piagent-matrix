@@ -1,5 +1,11 @@
 # Releases
 
+## 0.3.4 (in progress)
+
+### New Features
+
+* **The readiness check notices a drifted section.** A copy in `parts-enabled/` is the operator's outright — the bot republishes the shipped text to `parts-available/` on every start and never touches an enabled copy — and the cost of that design is silent staleness. It cost something real: one deployment spent six weeks telling its agent to check a heartbeat file deleted in 0.3.0, and that `/tmp` is not shared with the *different container* a scheduled job runs in, six weeks after the scheduler moved in beside it and made both false. The `{{placeholder}}` check caught the first only because a variable disappeared along with the mechanism; nothing caught the second at all. The two directories are now compared, and the direction is knowable rather than guessed: `publishParts` writes only when the shipped text actually changes, so a shipped file newer than the enabled copy means something shipped after yours was made, where the reverse is simply an edit. Drift warns and never fails — an edited copy being yours is the entire point — a newer enabled copy reports as `edited`, and a section with nothing shipped to compare against reports as `your own`. Found the second drift on its first run against a real deployment
+
 ## 0.3.3 (2026-10-20)
 
 ### New Features
