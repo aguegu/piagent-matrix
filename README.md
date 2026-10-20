@@ -108,6 +108,36 @@ host bot in, and a table of the failures this actually hits.
 
 Prefer to run it from a clone? **[From source](docs/from-source.md)**.
 
+## Deploying it with an agent
+
+The steps above are written to be followed by a coding agent as readily as by
+a person. Point yours at the quickstart:
+
+> Deploy piagent-matrix for me, following
+> https://github.com/aguegu/piagent-matrix/blob/main/docs/container-quickstart.md
+
+It can do the mechanical part — make the directory, write `compose.yml` and
+`.env`, pull, start, cross-sign, and check its own work. It cannot do four
+things, and they are the ones only you can:
+
+- **create the Matrix account** the bot logs in as, and its password;
+- **turn on recovery** for that account in Element — that is what creates the
+  secret storage cross-signing reads, and the recovery key comes from it;
+- **decide `MATRIX_ALLOWED_USERS`**, which means knowing who you are;
+- **invite the bot to a room**, from your own client.
+
+A good agent will do everything else and then stop and ask for those, rather
+than building two thirds of a bot and reporting success. What it checks its
+work with is the same thing you would:
+
+```sh
+docker compose exec bot node /app/scripts/doctor.js --json
+```
+
+which exits non-zero when something is actually wrong and names it, so each
+step can be verified rather than assumed. See
+[checking it](docs/container-quickstart.md#checking-it).
+
 ## It is still pi
 
 A container changes the command, not the tool. The image carries pi's own CLI,

@@ -151,6 +151,43 @@ out, never opening the bot's crypto store.
 Ends in `SUCCESS — device is cross-signed.`, after which Element stops
 flagging the session.
 
+## Checking it
+
+```sh
+docker compose exec bot node /app/scripts/doctor.js
+```
+
+One pass over everything the steps above set up — configuration, the data
+volume and spools, the device, the model provider, the agent's instructions,
+the allowlist, the scheduler, and whether the device is cross-signed. It is
+read-only and safe against a running bot: the cross-signing check asks the
+homeserver rather than opening the crypto store, which only one process may
+do.
+
+```
+ok    device: LFUFQGUCUW for @mybot:matrix.example.org
+ok    model provider: anthropic in /data/pi/auth.json
+WARN  allowlist: MATRIX_ALLOWED_USERS is empty — everyone who can message the bot may run shell commands
+        → set it to your own user id, then recreate the container
+ok    cross-signing: LFUFQGUCUW signed by 2 key(s)
+
+READY — with 1 warning(s).
+```
+
+A failure says what to do about it. A warning does not stop the bot working —
+an empty allowlist is serious but not a reason to think it will not start — so
+the exit code is 0 unless something actually failed, and `--json` gives the
+same report structured:
+
+```sh
+docker compose exec bot node /app/scripts/doctor.js --json
+```
+
+**Run it inside the deployment**, not from a checkout on the host. Several
+checks are about the environment the bot runs in — whether `supercronic` is on
+`PATH`, whether the data volume is writable by this user — and asking those of
+your laptop about a container's data directory answers the wrong question.
+
 ## Moving an existing bot in
 
 The six steps above assume a new bot. Moving one that already runs on a host

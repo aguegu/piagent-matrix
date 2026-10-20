@@ -2,13 +2,14 @@
   "name": "piagent-matrix",
   "version": "0.3.2",
   "private": true,
-  "description": "Talk to the pi coding agent from any Matrix client — end-to-end encrypted, with a persistent crypto store.",
+  "description": "Talk to the pi coding agent from any Matrix client \u2014 end-to-end encrypted, with a persistent crypto store.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
-    "cross-sign": "node scripts/cross-sign.js"
+    "cross-sign": "node scripts/cross-sign.js",
+    "doctor": "node scripts/doctor.js"
   },
   "license": "MIT",
   "dependencies": {

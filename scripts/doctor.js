@@ -1,0 +1,290 @@
+#!/usr/bin/env node
+// Is this deployment ready, and if not, what exactly is missing.
+//
+// Written to be read by something that is not a person. "Did it work" has so
+// far meant grepping the startup log for `Crypto ready=true`, which tells you
+// nothing when it is absent — and an agent asked to deploy this bot needs a
+// verification step at every stage, not a wall of narration to interpret.
+// Each check names what is wrong and what to do about it; `--json` gives the
+// same thing structured.
+//
+// Two rules this file must keep:
+//
+//   * **Read only.** It must be safe to run against a live deployment. Nothing
+//     here writes, and in particular nothing opens the crypto store: only one
+//     process may, and a second one desynchronises the Megolm ratchet. The
+//     cross-signing check therefore asks the *server* over HTTP rather than
+//     reading the store. See SECURITY.md.
+//   * **No side effects from probing.** `ModelRuntime.create()` would answer
+//     the provider question definitively, and would also create an empty
+//     `auth.json` when none exists — turning a diagnostic into a change.
+//     The file is inspected instead.
+//
+// Exit code is 0 when nothing failed, 1 otherwise, so a caller can branch on
+// it without parsing anything. Warnings do not fail: an empty allowlist is a
+// serious problem but not a reason to believe the bot will not start.
+
+import { existsSync, readFileSync, accessSync, constants } from "node:fs";
+import { join, resolve } from "node:path";
+import config from "config";
+
+const JSON_OUT = process.argv.includes("--json");
+const results = [];
+
+/** @param {"ok"|"warn"|"fail"} status */
+function record(name, status, detail, fix) {
+  results.push({ name, status, detail, ...(fix ? { fix } : {}) });
+}
+
+const ok = (n, d) => record(n, "ok", d);
+const warn = (n, d, f) => record(n, "warn", d, f);
+const fail = (n, d, f) => record(n, "fail", d, f);
+
+function writable(dir) {
+  try {
+    accessSync(dir, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+// --- configuration -----------------------------------------------------------
+
+const matrix = config.get("matrix");
+const dataDir = resolve(config.get("storage.dataDir") ?? "./data");
+const tokenPath = resolve(config.get("storage.token"));
+const agentDir = resolve(config.get("agent.agentDir"));
+
+if (!matrix.homeserver || !matrix.userId) {
+  fail(
+    "config",
+    `missing ${!matrix.homeserver ? "MATRIX_HOMESERVER" : ""}${!matrix.homeserver && !matrix.userId ? " and " : ""}${!matrix.userId ? "MATRIX_USER_ID" : ""}`,
+    "set them in .env beside compose.yml, then recreate the container — env_file is read at create, not at start",
+  );
+} else {
+  ok("config", `${matrix.userId} at ${matrix.homeserver}`);
+}
+
+// --- storage -----------------------------------------------------------------
+
+if (!existsSync(dataDir)) {
+  fail("data directory", `${dataDir} does not exist`, `mkdir -p ${dataDir}`);
+} else if (!writable(dataDir)) {
+  // The classic: Docker created a missing bind-mount source as root and the
+  // container runs as uid 1000.
+  fail("data directory", `${dataDir} is not writable by uid ${process.getuid?.() ?? "?"}`,
+    "create the bind-mount directories yourself before `up`, or chown them to 1000:1000");
+} else {
+  ok("data directory", `${dataDir} writable`);
+}
+
+for (const [label, key] of [["inbox", "inbox.dir"], ["outbox", "outbox.dir"]]) {
+  const dir = resolve(config.get(key));
+  if (!existsSync(dir)) fail(`${label} spool`, `${dir} does not exist`, `mkdir -p ${dir}`);
+  else if (!writable(dir)) fail(`${label} spool`, `${dir} is not writable`, "chown it to the user the bot runs as");
+  else ok(`${label} spool`, dir);
+}
+
+// --- identity ----------------------------------------------------------------
+//
+// token.json is what makes a restart keep the same device. Its absence is not
+// a failure on a first run — it is what the first password login produces.
+
+const token = readJson(tokenPath);
+if (!token) {
+  if (matrix.password) {
+    warn("device", `no ${tokenPath} yet — the next start will log in with MATRIX_PASSWORD and create it`,
+      "expected on a first run; after it exists the password is no longer needed");
+  } else {
+    fail("device", `no ${tokenPath} and MATRIX_PASSWORD is empty — nothing can log in`,
+      "set MATRIX_PASSWORD for the first login, then recreate the container");
+  }
+} else if (!token.deviceId || !token.accessToken) {
+  fail("device", `${tokenPath} is missing deviceId or accessToken`, "delete it and let a password login recreate it");
+} else if (token.userId && matrix.userId && token.userId !== matrix.userId) {
+  // Credentials swapped without swapping the data directory. The bot would
+  // answer as somebody else, which is worth catching before it does.
+  fail("device", `${tokenPath} holds ${token.userId} but MATRIX_USER_ID is ${matrix.userId}`,
+    "point this deployment at its own DATA_DIR, or remove the stale token");
+} else {
+  ok("device", `${token.deviceId} for ${token.userId ?? matrix.userId}`);
+}
+
+// --- model provider ----------------------------------------------------------
+//
+// `auth.json` containing `{}` is pi's "created, never configured" state, and
+// is exactly what a bot that has never been logged in looks like. An API key
+// in the environment is the other documented route; pi writes auth.json from
+// it on first use, so an empty file plus a key is fine.
+
+const authPath = join(agentDir, "auth.json");
+const auth = readJson(authPath);
+const envKey = Object.keys(process.env).find((k) => /_API_KEY$/.test(k) && process.env[k]);
+
+if (auth && Object.keys(auth).length > 0) {
+  ok("model provider", `${Object.keys(auth).join(", ")} in ${authPath}`);
+} else if (envKey) {
+  ok("model provider", `${envKey} in the environment; pi will write ${authPath} on first use`);
+} else if (auth) {
+  fail("model provider", `${authPath} is empty ({}) and no *_API_KEY is set`,
+    "`docker compose run --rm bot pi` then /login <provider>, or set an API key in .env");
+} else {
+  fail("model provider", `no ${authPath} and no *_API_KEY is set`,
+    "`docker compose run --rm bot pi` then /login <provider>, or set an API key in .env");
+}
+
+// --- what the agent is told --------------------------------------------------
+
+const agentsMd = join(agentDir, "AGENTS.md");
+if (!existsSync(agentsMd)) {
+  warn("agent instructions", `${agentsMd} not written yet`, "it is installed at every start; start the bot once");
+} else {
+  const text = readFileSync(agentsMd, "utf8");
+  if (/\{\{/.test(text)) {
+    fail("agent instructions", `${agentsMd} still contains a {{placeholder}}`,
+      "a value was not supplied; check the startup log for which");
+  } else {
+    ok("agent instructions", `${agentsMd}, ${text.length} chars`);
+  }
+}
+
+// --- access control ----------------------------------------------------------
+//
+// A warning rather than a failure: the bot starts and works. It just lets
+// anyone who can reach it run shell commands. See SECURITY.md.
+
+if (!matrix.allowedUsers?.length) {
+  warn("allowlist", "MATRIX_ALLOWED_USERS is empty — everyone who can message the bot may run shell commands",
+    "set it to your own user id, then recreate the container");
+} else {
+  ok("allowlist", `${matrix.allowedUsers.length} user(s)`);
+}
+
+// --- scheduling --------------------------------------------------------------
+
+const crontabFile = config.get("agent.crontabFile");
+if (!crontabFile) {
+  ok("scheduler", "CRONTAB_FILE unset — scheduling is off, and the agent is not told it exists");
+} else {
+  const onPath = (process.env.PATH ?? "").split(":").some((d) => d && existsSync(join(d, "supercronic")));
+  if (!onPath) {
+    fail("scheduler", `CRONTAB_FILE is ${crontabFile} but there is no supercronic on PATH`,
+      "nothing would read the schedule; unset CRONTAB_FILE or use an image that ships supercronic");
+  } else if (!existsSync(crontabFile)) {
+    warn("scheduler", `${crontabFile} does not exist yet`, "the bot seeds it at startup");
+  } else {
+    const jobs = readFileSync(crontabFile, "utf8").split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
+    ok("scheduler", `${crontabFile}, ${jobs.length} active job(s)`);
+  }
+}
+
+// --- is one already running --------------------------------------------------
+//
+// Informational, and the thing to know before starting another: two processes
+// on one data directory desynchronise the Megolm ratchet.
+
+const lockPath = join(dataDir, "bot.lock");
+if (!existsSync(lockPath)) {
+  ok("instance lock", "free — nothing has claimed this data directory");
+} else {
+  const pid = Number.parseInt(readFileSync(lockPath, "utf8").trim(), 10);
+
+  // `process.kill(pid, 0)` alone is not enough, and the way it fails is
+  // instructive: thread ids share the pid space, so in a fresh container
+  // node's own libuv threadpool occupies the low numbers and a lock naming
+  // pid 7 "exists" as one of them. Checking the command line is what
+  // instance-lock.js does for the same reason.
+  let visible = false;
+  try {
+    process.kill(pid, 0);
+    visible = readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("index.js");
+  } catch (err) {
+    // EPERM means it exists and belongs to someone else; an unreadable
+    // /proc entry means it is gone between the two calls.
+    visible = err?.code === "EPERM";
+  }
+
+  if (visible) {
+    ok("instance lock", `held by pid ${pid}, which is running here — a bot is live`);
+  } else {
+    // A pid that is not visible is *not* the same as a pid that is gone, and
+    // the difference matters more than anything else this script reports.
+    // Process ids are per namespace: run this in a throwaway container and the
+    // live bot's pid 7 is simply not in view. Calling that "stale" would
+    // invite starting a second bot on one crypto store, which desynchronises
+    // the Megolm ratchet and produces messages strict clients refuse to
+    // decrypt. So say what is known and no more.
+    warn("instance lock", `claimed by pid ${pid}, which is not visible from this process`,
+      "it may be stale, or a bot may be running in another container — check `docker ps` before starting one; " +
+        "two bots on one data directory desynchronise the Megolm ratchet");
+  }
+}
+
+// --- cross-signing -----------------------------------------------------------
+//
+// Asked of the server rather than the local store, so this is safe while the
+// bot is running. A device signed only by itself is one Element flags as
+// "Encrypted by a device not verified by its owner".
+
+async function checkCrossSigning() {
+  if (!token?.accessToken || !token?.deviceId || !matrix.homeserver) {
+    warn("cross-signing", "skipped — needs a device token", "run again once the bot has logged in");
+    return;
+  }
+  try {
+    const res = await fetch(`${matrix.homeserver}/_matrix/client/v3/keys/query`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ device_keys: { [matrix.userId]: [token.deviceId] } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      warn("cross-signing", `homeserver answered ${res.status}`, "check MATRIX_HOMESERVER and the token");
+      return;
+    }
+    const body = await res.json();
+    const sigs = Object.keys(body?.device_keys?.[matrix.userId]?.[token.deviceId]?.signatures?.[matrix.userId] ?? {});
+    const selfOnly = sigs.length <= 1 && sigs.every((s) => s.endsWith(token.deviceId));
+    if (sigs.length === 0 || selfOnly) {
+      warn("cross-signing", `${token.deviceId} is signed only by itself`,
+        "docker compose run --rm bot node /app/scripts/cross-sign.js");
+    } else {
+      ok("cross-signing", `${token.deviceId} signed by ${sigs.length} key(s)`);
+    }
+  } catch (err) {
+    warn("cross-signing", `could not reach the homeserver: ${err?.message ?? err}`, "check MATRIX_HOMESERVER");
+  }
+}
+
+await checkCrossSigning();
+
+// --- report ------------------------------------------------------------------
+
+const failed = results.filter((r) => r.status === "fail");
+const warned = results.filter((r) => r.status === "warn");
+
+if (JSON_OUT) {
+  console.log(JSON.stringify({ ready: failed.length === 0, failed: failed.length, warnings: warned.length, checks: results }, null, 2));
+} else {
+  const mark = { ok: "ok  ", warn: "WARN", fail: "FAIL" };
+  for (const r of results) {
+    console.log(`${mark[r.status]}  ${r.name}: ${r.detail}`);
+    if (r.fix && r.status !== "ok") console.log(`        → ${r.fix}`);
+  }
+  console.log(
+    failed.length === 0
+      ? `\nREADY${warned.length ? ` — with ${warned.length} warning(s)` : ""}.`
+      : `\nNOT READY — ${failed.length} check(s) failed.`,
+  );
+}
+
+process.exit(failed.length === 0 ? 0 : 1);
