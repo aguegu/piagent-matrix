@@ -134,6 +134,9 @@ exactly that, which needs no deployment to exist yet:
 docker run --rm aguegu/piagent-matrix:latest node /app/scripts/doctor.js --preflight --json
 ```
 
+**From 0.3.3.** Earlier images do not carry the script; until then, run it from
+a checkout with `npm run doctor -- --preflight`.
+
 It reports every input as a field — whether it is set, whether it is required,
 whether it is a secret and so must not be echoed back, and where it comes
 from. Everything on that list says `"from": "human"`, which is the point.

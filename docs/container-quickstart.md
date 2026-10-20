@@ -160,6 +160,9 @@ deployment needs. It inspects no files and requires no container:
 docker run --rm aguegu/piagent-matrix:latest node /app/scripts/doctor.js --preflight
 ```
 
+**From 0.3.3** — earlier images do not ship the script, and the command fails
+with `Cannot find module`. From a checkout: `npm run doctor -- --preflight`.
+
 ```
 NEED  MATRIX_HOMESERVER: Base URL of the homeserver the bot logs in to
 NEED  MATRIX_USER_ID: The bot's own Matrix user id
